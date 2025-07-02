@@ -1,43 +1,124 @@
 import React, { useState, useEffect } from 'react';
-import api from '../../utils/api.js';
 import NavButton from '../components/NavButton.jsx';
 import FriendsList from '../components/FriendsList.jsx';
 import FriendDetail from '../components/FriendDetail.jsx';
 import FriendRequestNotification from '../components/FriendRequestNotification.jsx';
+import ChangeSign from '../components/ChangeSign.jsx';
 
-
-  const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarChange }) => {
+const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarChange }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [activeChat, setActiveChat] = useState(null);
-  const [allUsers, setAllUsers] = useState([]); // 所有用户列表
-  const [friendRequests, setFriendRequests] = useState([]); // 已发送的好友请求id
-  const [receivedRequests, setReceivedRequests] = useState([]); // 收到的好友请求对象
+  const [allUsers, setAllUsers] = useState([]);
+  const [friendRequests, setFriendRequests] = useState([]);
+  const [receivedRequests, setReceivedRequests] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
+  const [showChangeSign, setShowChangeSign] = useState(false);
+  const [currentSignature, setCurrentSignature] = useState("这是我的个性签名");
 
- 
-  // 页面加载时获取数据
-  useEffect(() => {
-    // 获取当前用户信息
-    api.getProfile().then(user => setCurrentUser(user)).catch(() => setCurrentUser(null));
-    // 获取好友列表
-    api.getFriends().then(friends => setFriendsList(friends)).catch(() => setFriendsList([]));
-    // 获取所有用户（用于全平台搜索）
-    api.getAllUsers().then(users => setAllUsers(users)).catch(() => setAllUsers([]));
-    // 获取收到的好友请求
-    api.getFriendRequests().then(requests => setReceivedRequests(requests)).catch(() => setReceivedRequests([]));
-  }, []);
+  // 创建包含自己的好友列表
+  const createFriendsList = () => {
+    const selfUser = {
+      id: 'self',
+      name: currentUser?.name || "我",
+      account: currentUser?.email || "current_user",
+      avatar: currentUser?.avatar || "1.png",
+      signature: currentSignature,
+      isOnline: true,
+      isSelf: true,
+      isFriend: true
+    };
 
+    const otherFriends = [
+      {
+        id: 1,
+        name: "张三",
+        account: "zhangsan001",
+        avatar: "2.png",
+        signature: "工作使我快乐",
+        isOnline: true,
+        isFriend: true
+      },
+      {
+        id: 2,
+        name: "李四",
+        account: "lisi_dev",
+        avatar: "3.png",
+        signature: "代码改变世界",
+        isOnline: false,
+        isFriend: true
+      },
+      {
+        id: 3,
+        name: "王五",
+        account: "wangwu2023",
+        avatar: "4.png",
+        signature: "学习永无止境",
+        isOnline: true,
+        isFriend: true
+      },
+      {
+        id: 4,
+        name: "赵六",
+        account: "zhaoliu_sci",
+        avatar: "5.png",
+        signature: "探索科学的奥秘",
+        isOnline: true,
+        isFriend: true
+      },
+      {
+        id: 5,
+        name: "孙七",
+        account: "sunqi_art",
+        avatar: "6.png",
+        signature: "艺术来源于生活",
+        isOnline: false,
+        isFriend: true
+      },
+    ];
 
-  // 3. 个人信息显示
-  const contactInfo = {
-    name: currentUser?.name || "当前用户",
-    isOnline: true,
+    return [selfUser, ...otherFriends];
   };
 
- 
+  // 初始化数据
+  useEffect(() => {
+    const initialFriendsList = createFriendsList();
+    setFriendsList(initialFriendsList);
+
+    const createAllUsers = () => {
+      return [
+        ...initialFriendsList.filter(f => f.id !== 'self'),
+        {
+          id: 6,
+          name: "钱八",
+          account: "qianba_music",
+          avatar: "7.png",
+          signature: "音乐是我的生命",
+          isOnline: true,
+          isFriend: false
+        },
+        {
+          id: 7,
+          name: "吴九",
+          account: "wujiu_tech",
+          avatar: "8.png",
+          signature: "科技创新未来",
+          isOnline: false,
+          isFriend: false
+        }
+      ];
+    };
+
+    setAllUsers(createAllUsers());
+  }, [currentUser]);
+
+  const [contactInfo] = useState({
+    name: currentUser?.name || "当前用户",
+    isOnline: true,
+  });
+
   // 事件处理函数
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -83,57 +164,60 @@ import FriendRequestNotification from '../components/FriendRequestNotification.j
     onNavigateToChat(); // 调用从 props 传入的导航函数
   };
 
-  // 添加好友
-  const handleAddFriend = async (friend) => {
+  const handleVideoCall = () => {
+    console.log('发起视频通话');
+  };
+
+  const handleAddFriend = (friend) => {
     if (!friend) return;
+
     if (friendRequests.includes(friend.id)) {
       alert('好友请求已发送，请等待对方确认');
       return;
     }
-    try {
-      await api.addFriend(friend.id); // 1. 调用API
-      setFriendRequests([...friendRequests, friend.id]);
-      alert(`已向 ${friend.name} 发送好友申请`);
-      // 调试用：模拟收到好友请求（如果后端未实现，前端临时模拟）
-      setReceivedRequests(prev => [...prev, {
-        id: Date.now(), // 模拟请求id
-        from: friend, // 假设from字段为发起人
-        name: friend.name,
-        account: friend.account,
-        avatar: friend.avatar,
-        signature: friend.signature,
-      }]);
-    } catch (e) {
-      alert(e.message || '发送好友申请失败');
-    }
+
+    setFriendRequests([...friendRequests, friend.id]);
+    alert(`已向 ${friend.name} 发送好友申请`);
+
+    setReceivedRequests(prev => [...prev, {
+      ...friend,
+      requestId: Date.now()
+    }]);
   };
 
-  // 通过好友请求
-  const handleAcceptRequest = async (request) => {
-    try {
-      if (request.id) {
-        await api.acceptFriendRequest(request.id); // 调用API
+  const handleAcceptRequest = (request) => {
+    setFriendsList(prev => [
+      ...prev,
+      {
+        ...request,
+        isFriend: true
       }
-      setFriendsList(prev => [
-        ...prev,
-        { ...request.from, isFriend: true }
-      ]);
-      setReceivedRequests(prev => prev.filter(r => r.id !== request.id));
-      alert(`已添加 ${request.name} 为好友`);
-    } catch (e) {
-      alert(e.message || '操作失败');
-    }
+    ]);
+
+    setReceivedRequests(prev => prev.filter(r => r.requestId !== request.requestId));
+    alert(`已添加 ${request.name} 为好友`);
   };
 
-  // 拒绝好友请求
-  const handleRejectRequest = async (request) => {
-    try {
-      if (request.id) {
-        await api.rejectFriendRequest(request.id); // 调用API
-      }
-      setReceivedRequests(prev => prev.filter(r => r.id !== request.id));
-    } catch (e) {
-      alert(e.message || '操作失败');
+  const handleRejectRequest = (request) => {
+    setReceivedRequests(prev => prev.filter(r => r.requestId !== request.requestId));
+  };
+
+  // 处理个性签名更改
+  const handleChangeSignature = () => {
+    setShowChangeSign(true);
+  };
+
+  const handleSaveSignature = (newSignature) => {
+    setCurrentSignature(newSignature);
+    // 更新好友列表中自己的签名
+    setFriendsList(prev => prev.map(friend =>
+      friend.id === 'self'
+        ? { ...friend, signature: newSignature }
+        : friend
+    ));
+    // 如果当前选中的是自己，也要更新selectedFriend
+    if (selectedFriend && selectedFriend.id === 'self') {
+      setSelectedFriend(prev => ({ ...prev, signature: newSignature }));
     }
   };
 
@@ -219,7 +303,7 @@ import FriendRequestNotification from '../components/FriendRequestNotification.j
         {/* === 修改这里，用 <img> 标签替换 'F' === */}
         <div style={logoStyle}>
           <img
-            src="/logo.png" 
+            src="/logo.png" // 假设图片在 public/logo.png
             alt="Logo"
             style={{
               width: '100%',
@@ -239,24 +323,26 @@ import FriendRequestNotification from '../components/FriendRequestNotification.j
         </div>
         <div style={navButtonsContainerStyle}>
           <NavButton
-            onClick={handleRefreshPage}
+            onClick={handleRefreshPage} // FriendsPage 内部的刷新函数
             title="好友列表"
-            isActive={true}
+            isActive={true} // 当前页面是好友列表，所以 active
           >
-            👥
+            👥 {/* Friends list icon */}
           </NavButton>
           <NavButton
-            onClick={onNavigateToChat}
+            onClick={onNavigateToChat} // 从 props 接收的导航到聊天页面函数
             title="聊天页面"
           >
-            💬
+            💬 {/* Chat icon */}
           </NavButton>
+
           <NavButton
             onClick={onLogout}
             title="退出登录"
           >
             🚪
           </NavButton>
+          
         </div>
       </div>
 
@@ -279,6 +365,7 @@ import FriendRequestNotification from '../components/FriendRequestNotification.j
           onAvatarChange={onAvatarChange}
           friendRequests={friendRequests}
           onAddFriend={handleAddFriend}
+          onChangeSignature={handleChangeSignature}
         />
       </div>
 
@@ -286,6 +373,13 @@ import FriendRequestNotification from '../components/FriendRequestNotification.j
         requests={receivedRequests}
         onAccept={handleAcceptRequest}
         onReject={handleRejectRequest}
+      />
+
+      <ChangeSign
+        isOpen={showChangeSign}
+        onClose={() => setShowChangeSign(false)}
+        currentSignature={currentSignature}
+        onSave={handleSaveSignature}
       />
     </div>
   );
