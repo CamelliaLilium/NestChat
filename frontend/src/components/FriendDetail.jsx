@@ -8,17 +8,26 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
 
   const rightPanelStyle = {
     width: '60%',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#ffffff', // 这是一个备用背景色，如果图片加载失败会显示
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     padding: '20px',
+    // --- 添加背景图片样式 ---
+    backgroundImage: 'url("/background/message.png")', // <<<< 已替换为你的图片路径
+    backgroundSize: 'cover',       // 使图片覆盖整个容器，可能会裁剪
+    backgroundRepeat: 'no-repeat', // 防止图片重复
+    backgroundPosition: 'center',  // 将图片居中显示
+    // backgroundAttachment: 'fixed', // 如果你希望背景图片固定不随内容滚动
+    // 如果需要，可以添加一个半透明的背景色叠加在图片上方，让文字更清晰
+    // backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    // --- 结束背景图片样式 ---
   };
 
   const selectedFriendContainerStyle = {
     textAlign: 'center',
-    maxWidth: '400px',
+    maxWidth: '400px', // 限制好友详情内容的显示宽度
   };
 
   const largAvatarStyle = {
@@ -132,8 +141,8 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
   };
 
   // 判断是否是好友
-  const isFriend = selectedFriend?.isFriend || 
-  (selectedFriend && !selectedFriend.isSelf && friendRequests.includes(selectedFriend.id));
+  const isFriend = selectedFriend?.isFriend ||
+    (selectedFriend && !selectedFriend.isSelf && friendRequests.includes(selectedFriend.id));
 
   // 添加发送好友请求函数
   const handleSendRequest = () => {
@@ -190,22 +199,22 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
 
         {/* 只有在不是自己的时候才显示发消息和删除好友按钮 ,如果该好友没有被添加则显示加好友按钮*/}
         {!selectedFriend.isSelf && (
-        <div style={buttonContainerStyle}>
-          {isFriend ? (
-            <>
-              <button style={sendMessageButtonStyle} onClick={onSendMessage}>
-                发消息
+          <div style={buttonContainerStyle}>
+            {isFriend ? (
+              <>
+                <button style={sendMessageButtonStyle} onClick={handleSendMessage}>
+                  发消息
+                </button>
+                <button style={deleteButtonStyle} onClick={handleDeleteFriend}>
+                  删除好友
+                </button>
+              </>
+            ) : (
+              <button style={addFriendButtonStyle} onClick={handleSendRequest}>
+                添加好友
               </button>
-              <button style={deleteButtonStyle} onClick={handleDeleteFriend}>
-                删除好友
-              </button>
-            </>
-          ) : (
-            <button style={addFriendButtonStyle} onClick={handleSendRequest}>
-              添加好友
-            </button>
-          )}
-        </div>
+            )}
+          </div>
         )}
       </div>
 

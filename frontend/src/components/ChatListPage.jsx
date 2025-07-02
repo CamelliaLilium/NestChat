@@ -1,56 +1,37 @@
-import React, { useState } from 'react';
 
-const ChatListPage = ({ onClose, onSwitchChat }) => {
+import React, { useState, useEffect } from 'react';
+
+// 聊天列表组件，支持外部传入聊天数据
+const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], onClearUnread }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [chatList, setChatList] = useState([]);
 
-  // Mock 数据
-  const chatList = [
-    {
-      id: 1,
-      name: "张三",
-      lastMessage: "你好，今天天气真不错呢！你在做什么？",
-      timestamp: "14:30",
-      avatar: "👨‍💼",
-      unreadCount: 2,
-    },
-    {
-      id: 2,
-      name: "李四",
-      lastMessage: "会议资料我已经准备好了，明天见",
-      timestamp: "12:15",
-      avatar: "👩‍💻",
-      unreadCount: 0,
-    },
-    {
-      id: 3,
-      name: "王五",
-      lastMessage: "周末一起去看电影吧！",
-      timestamp: "昨天",
-      avatar: "👨‍🎓",
-      unreadCount: 1,
-    },
-    {
-      id: 4,
-      name: "赵六",
-      lastMessage: "项目进度如何了？需要帮助吗",
-      timestamp: "昨天",
-      avatar: "👩‍🔬",
-      unreadCount: 0,
-    },
-    {
-      id: 5,
-      name: "孙七",
-      lastMessage: "谢谢你的帮助！",
-      timestamp: "周二",
-      avatar: "👨‍🎨",
-      unreadCount: 0,
-    },
-  ];
+  // 聊天数据排序，最近时间在最上面
+  useEffect(() => {
+    if (Array.isArray(propChatList)) {
+      // 假设每条数据有 timestamp 字段，类型为 Date 或可比较的字符串
+      const sorted = [...propChatList].sort((a, b) => {
+        // 支持时间戳为数字或字符串
+        const tA = new Date(a.timestamp).getTime();
+        const tB = new Date(b.timestamp).getTime();
+        return tB - tA;
+      });
+      setChatList(sorted);
+    }
+  }, [propChatList]);
+
+  // 点击联系人，清除未读
+  const handleChatClick = (chat, index) => {
+    if (onSwitchChat) onSwitchChat(chat.id);
+    if (onClearUnread) onClearUnread(chat.id);
+    // 本地也清除未读（如果没有 onClearUnread）
+    setChatList(prev => prev.map((item, i) => i === index ? { ...item, unreadCount: 0 } : item));
+  };
 
   // 桌面端右侧面板样式
   const panelStyle = {
     height: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255,255,255,0.7)',
     display: 'flex',
     flexDirection: 'column',
     borderLeft: '1px solid #f8bbd9',
@@ -193,7 +174,7 @@ const ChatListPage = ({ onClose, onSwitchChat }) => {
             style={chatItemStyle(index)}
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
-            onClick={() => onSwitchChat(chat.id)}
+            onClick={() => handleChatClick(chat, index)}
           >
             <div style={avatarStyle}>{chat.avatar}</div>
             <div style={contentStyle}>
