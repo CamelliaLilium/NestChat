@@ -64,19 +64,36 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
   };
 
   //___________________________________________________________________________
-  // 发送图片消息（这里只做文本占位，实际应上传图片并传url）
-  const handleSendImage = async () => {
+  // 发送图片消息：选择图片，前端本地预览（base64），插入消息流，type为image
+  const handleSendImage = () => {
     if (!currentChatId) return;
-    try {
-      const res = await api.sendMessage(currentChatId, '📷 [图片]', 'image');
-      if (res.message) {
-        setMessages(prev => [...prev, res.message]);
-      }
-    } catch (e) {
-      alert(e.message || '图片消息发送失败');
-    }
+    // 创建一个隐藏的文件选择框
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imageUrl = event.target.result;
+        // 构造本地图片消息对象
+        const localImageMsg = {
+          id: Date.now() + Math.random(),
+          content: imageUrl,
+          type: 'image',
+          isOwn: true,
+          timestamp: new Date().toLocaleTimeString(),
+          avatar: currentUser?.avatar || '',
+        };
+        setMessages(prev => [...prev, localImageMsg]);
+        // TODO: 后端有图片上传接口时，这里可上传后端，返回url再发消息
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
   };
-  //___________________________________________________________________________ 
+  //___________________________________________________________________________
 
   const handleSendVoice = () => {
     setIsVoiceChatOpen(true);
