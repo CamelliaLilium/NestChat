@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PhotoSelect from './PhotoSelect.jsx';
 import DeleteFriendConfirm from './DeleteFriendConfirm.jsx';
 
-const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend }) => {
+const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend, onChangeSignature }) => {
   const [showPhotoSelect, setShowPhotoSelect] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -112,6 +112,8 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
     cursor: 'not-allowed'
   };
 
+
+
   const handleAvatarClick = () => {
     if (selectedFriend?.isSelf) {
       setShowPhotoSelect(true);
@@ -196,6 +198,36 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
             </span>
           </div>
         </div>
+
+        {/* 只有在查看自己信息时才显示更改个性签名按钮 */}
+        {selectedFriend.isSelf && (
+          <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+            <button
+              style={{
+                padding: '8px 20px',
+                borderRadius: '20px',
+                border: '2px solid #e91e63',
+                backgroundColor: 'transparent',
+                color: '#e91e63',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+              }}
+              onClick={() => onChangeSignature && onChangeSignature()}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#f8bbd9';
+                e.target.style.borderColor = '#c2185b';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'transparent';
+                e.target.style.borderColor = '#e91e63';
+              }}
+            >
+              更改个性签名
+            </button>
+          </div>
+        )}
 
         {/* 只有在不是自己的时候才显示发消息和删除好友按钮 ,如果该好友没有被添加则显示加好友按钮*/}
         {!selectedFriend.isSelf && (
