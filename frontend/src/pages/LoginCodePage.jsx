@@ -85,7 +85,12 @@ const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLo
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
-    backgroundColor: '#fce4ec',
+    // === 修改这里，添加背景图片 ===
+    backgroundImage: 'url("/LoginBack.png")', // 假设图片在 public/images 目录下
+    backgroundSize: 'cover', // 覆盖整个容器
+    backgroundRepeat: 'no-repeat', // 不重复平铺
+    backgroundPosition: 'center', // 居中显示
+    // === 结束修改 ===
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     padding: '20px',
     minWidth: '1200px', // 桌面端最小宽度
@@ -94,7 +99,7 @@ const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLo
   };
 
   const formContainerStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(252, 252, 252, 0.8)',
     borderRadius: '16px',
     padding: '50px 60px', // 增加内边距
     boxShadow: '0 8px 32px rgba(233, 30, 99, 0.15)',
@@ -297,6 +302,7 @@ const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLo
         </div>
       )}
 
+      {/* 定义 CSS 动画 */}
       <style>
         {`
           @keyframes slideDown {
@@ -327,4 +333,3 @@ const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLo
 };
 
 export default LoginCodePage;
-
