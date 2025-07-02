@@ -4,7 +4,7 @@ cd backend
 (首次在该目录下运行)npm install
 node server.js
 
-# 开启前端
+# 开启前端（新开一个git bash）
 cd frontend
 (首次在该目录下运行)npm install
 npm run dev
