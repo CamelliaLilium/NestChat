@@ -4,8 +4,8 @@ import FriendsPage from './pages/FriendsPage.jsx';
 import SignUpPage from './pages/SignUpPage.jsx';
 import LoginCodePage from './pages/LoginCodePage.jsx';
 import LoginVcodePage from './pages/LoginVcodePage.jsx';
-// import websocketClient from './utils/websocket.js';
-// import apiClient from './utils/api.js';
+import websocketClient from './utils/websocket.js';
+import apiClient from './utils/api.js';
 
 // App主组件，负责全局状态管理和页面路由
 function App() {
@@ -139,6 +139,16 @@ function App() {
     setCurrentPage('chat'); // 选中好友后跳转到聊天页面
   };
 
+  // 统一的退出登录逻辑
+  const handleLogout = async () => {
+    await apiClient.logout();
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    localStorage.removeItem('currentUser');
+    localStorage.setItem('isLoggedIn', 'false');
+    setCurrentPage('login');
+  };
+
   return (
     <div>
       {!isLoggedIn ? (
@@ -146,21 +156,21 @@ function App() {
         <>
           {currentPage === 'login' && (
             <LoginCodePage
-              onLoginSuccess={handleLoginSuccess} // 传递登录成功回调
-              onNavigateToSignUp={navigateToSignUp} // 传递导航到注册页面的回调
-              onNavigateToVerificationLogin={navigateToLoginVcode} // 传递导航到验证码登录页面的回调
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToSignUp={navigateToSignUp}
+              onNavigateToVerificationLogin={navigateToLoginVcode}
             />
           )}
           {currentPage === 'signup' && (
             <SignUpPage
-              onSignUpSuccess={handleSignUpSuccess} // 传递注册成功回调
-              onNavigateToLogin={navigateToLogin} // 传递导航到登录页面的回调
+              onSignUpSuccess={handleSignUpSuccess}
+              onNavigateToLogin={navigateToLogin}
             />
           )}
           {currentPage === 'loginVcode' && (
             <LoginVcodePage
-              onLoginSuccess={handleLoginSuccess} // 传递登录成功回调
-              onNavigateToLogin={navigateToLogin} // 传递导航到密码登录页面的回调
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToLogin={navigateToLogin}
             />
           )}
         </>
@@ -169,17 +179,19 @@ function App() {
         <>
           {currentPage === 'chat' && (
             <ChatPage
-              onNavigateToFriends={navigateToFriends} // 传递导航到好友列表页面的回调
-              selectedContact={selectedContact} // 传递当前选中的联系人信息
-              currentUser={currentUser} // 传递当前用户信息
+              onNavigateToFriends={navigateToFriends}
+              selectedContact={selectedContact}
+              currentUser={currentUser}
+              onLogout={handleLogout}
             />
           )}
           {currentPage === 'friends' && (
             <FriendsPage
-              onNavigateToChat={navigateToChat} // 传递导航到聊天页面的回调
-              onSelectFriend={handleSelectFriend} // 传递选择好友的回调
-              currentUser={currentUser} // 传递当前用户信息
-              onAvatarChange={handleAvatarChange} // 传递头像变更回调
+              onNavigateToChat={navigateToChat}
+              onSelectFriend={handleSelectFriend}
+              currentUser={currentUser}
+              onAvatarChange={handleAvatarChange}
+              onLogout={handleLogout}
             />
           )}
         </>
