@@ -4,8 +4,7 @@ import FriendsPage from './pages/FriendsPage.jsx';
 import SignUpPage from './pages/SignUpPage.jsx';
 import LoginCodePage from './pages/LoginCodePage.jsx';
 import LoginVcodePage from './pages/LoginVcodePage.jsx';
-import websocketClient from './utils/websocket.js';
-import apiClient from './utils/api.js';
+import apiClient from '../utils/api.js';
 
 // App主组件，负责全局状态管理和页面路由
 function App() {
@@ -93,7 +92,7 @@ function App() {
     localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // 更新 localStorage 中的用户信息
     // 刷新页面以同步所有头像显示，这是根据用户需求进行的，
     // 在React中更推荐通过状态管理和组件重渲染来同步
-    window.location.reload();
+    // window.location.reload();
   };
 
   // navigateToChat 函数：导航到聊天页面
