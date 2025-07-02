@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import NavButton from '../components/NavButton.jsx';
 import FriendsList from '../components/FriendsList.jsx';
 import FriendDetail from '../components/FriendDetail.jsx';
-import { friendsStyles } from '../styles/friendsStyles.js';
 import FriendRequestNotification from '../components/FriendRequestNotification.jsx';
 
 const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarChange }) => {
@@ -14,7 +13,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
   const [allUsers, setAllUsers] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
-  const [friendsList, setFriendsList] = useState([]); // 将 friendsList 改为状态变量
+  const [friendsList, setFriendsList] = useState([]);
 
   // 创建包含自己的好友列表
   const createFriendsList = () => {
@@ -26,7 +25,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
       signature: "这是我的个性签名",
       isOnline: true,
       isSelf: true,
-      isFriend: true // 标记为好友
+      isFriend: true
     };
 
     const otherFriends = [
@@ -37,7 +36,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
         avatar: "2.png",
         signature: "工作使我快乐",
         isOnline: true,
-        isFriend: true // 标记为好友
+        isFriend: true
       },
       {
         id: 2,
@@ -46,7 +45,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
         avatar: "3.png",
         signature: "代码改变世界",
         isOnline: false,
-        isFriend: true // 标记为好友
+        isFriend: true
       },
       {
         id: 3,
@@ -55,7 +54,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
         avatar: "4.png",
         signature: "学习永无止境",
         isOnline: true,
-        isFriend: true // 标记为好友
+        isFriend: true
       },
       {
         id: 4,
@@ -64,7 +63,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
         avatar: "5.png",
         signature: "探索科学的奥秘",
         isOnline: true,
-        isFriend: true // 标记为好友
+        isFriend: true
       },
       {
         id: 5,
@@ -73,7 +72,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
         avatar: "6.png",
         signature: "艺术来源于生活",
         isOnline: false,
-        isFriend: true // 标记为好友
+        isFriend: true
       },
     ];
 
@@ -82,11 +81,9 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
 
   // 初始化数据
   useEffect(() => {
-    // 初始化好友列表
     const initialFriendsList = createFriendsList();
     setFriendsList(initialFriendsList);
-    
-    // 创建所有用户列表（包含非好友）
+
     const createAllUsers = () => {
       return [
         ...initialFriendsList.filter(f => f.id !== 'self'),
@@ -97,7 +94,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
           avatar: "7.png",
           signature: "音乐是我的生命",
           isOnline: true,
-          isFriend: false // 非好友
+          isFriend: false
         },
         {
           id: 7,
@@ -106,11 +103,11 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
           avatar: "8.png",
           signature: "科技创新未来",
           isOnline: false,
-          isFriend: false // 非好友
+          isFriend: false
         }
       ];
     };
-    
+
     setAllUsers(createAllUsers());
   }, [currentUser]);
 
@@ -119,23 +116,22 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     isOnline: true,
   });
 
-  // 修改搜索处理函数
+  // 事件处理函数
   const handleSearch = (query) => {
     setSearchQuery(query);
     if (query.trim()) {
-      const results = allUsers.filter(user => 
-        user.name.includes(query) || 
+      const results = allUsers.filter(user =>
+        user.name.includes(query) ||
         user.account.includes(query) ||
         user.signature.includes(query)
       );
-      
+
       setSearchResults(results);
       setShowSearchResults(true);
-      
+
       if (results.length === 0) {
         alert('该用户不存在');
       } else if (results.length > 0) {
-        // 自动选择第一个搜索结果
         setSelectedFriend(results[0]);
       }
     } else {
@@ -149,96 +145,179 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     setShowSearchResults(false);
   };
 
-  const handleNavigateToChat = () => {
-    onNavigateToChat();
-  };
+  // 已有 onNavigateToChat 作为 prop，可以直接调用
+  // const handleNavigateToChat = () => {
+  //   onNavigateToChat();
+  // };
 
   const handleRefreshPage = () => {
     window.location.reload();
   };
 
-  // 按下发送消息按钮
   const handleSendMessage = (friend) => {
     if (!friend) return;
-    
     setActiveChat(friend);
-    onSelectFriend(friend); // 设置当前聊天好友
-    onNavigateToChat(); // 触发父组件的页面跳转
+    onSelectFriend(friend);
+    onNavigateToChat(); // 调用从 props 传入的导航函数
   };
 
   const handleVideoCall = () => {
     console.log('发起视频通话');
   };
 
-  // 添加好友函数
   const handleAddFriend = (friend) => {
     if (!friend) return;
-    
+
     if (friendRequests.includes(friend.id)) {
       alert('好友请求已发送，请等待对方确认');
       return;
     }
-    
+
     setFriendRequests([...friendRequests, friend.id]);
     alert(`已向 ${friend.name} 发送好友申请`);
-    
-    // 模拟接收好友请求（在实际应用中应从服务器接收）
+
     setReceivedRequests(prev => [...prev, {
       ...friend,
-      requestId: Date.now() // 使用时间戳作为唯一ID
+      requestId: Date.now()
     }]);
   };
 
-  // 处理好友请求（接受）
   const handleAcceptRequest = (request) => {
-    // 添加到好友列表
     setFriendsList(prev => [
-      ...prev, 
+      ...prev,
       {
         ...request,
-        isFriend: true // 标记为好友
+        isFriend: true
       }
     ]);
-    
-    // 从请求列表中移除
+
     setReceivedRequests(prev => prev.filter(r => r.requestId !== request.requestId));
-    
     alert(`已添加 ${request.name} 为好友`);
   };
 
-  // 处理好友请求（拒绝）
   const handleRejectRequest = (request) => {
     setReceivedRequests(prev => prev.filter(r => r.requestId !== request.requestId));
   };
 
+  // 响应式样式定义
+  const containerStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100vh',
+    width: '100vw',
+    backgroundColor: '#fce4ec',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    minWidth: '320px',
+    boxSizing: 'border-box',
+  };
+
+  const headerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '1vw 2vw',
+    backgroundColor: '#ffffff',
+    borderBottom: '1px solid #f8bbd9',
+    boxShadow: '0 2px 4px rgba(233, 30, 99, 0.1)',
+    minHeight: '60px',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: '1rem',
+  };
+
+  const logoStyle = {
+    width: 'clamp(35px, 4vw, 50px)',
+    height: 'clamp(35px, 4vw, 50px)',
+    backgroundColor: '#e91e63',
+    borderRadius: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // 移除 color 和 fontSize，因为将使用图片
+    marginRight: '1rem',
+    overflow: 'hidden', // 确保图片超出边界时被裁剪
+  };
+
+  const contactInfoStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    flex: '1',
+    minWidth: '120px',
+  };
+
+  const statusDotStyle = (isOnline) => ({
+    width: 'clamp(6px, 1vw, 10px)',
+    height: 'clamp(6px, 1vw, 10px)',
+    borderRadius: '50%',
+    backgroundColor: isOnline ? '#4caf50' : '#9e9e9e',
+  });
+
+  const navButtonsContainerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'clamp(10px, 1.5vw, 20px)',
+    flexWrap: 'wrap',
+  };
+
+  const mainContentStyle = {
+    display: 'flex',
+    flex: 1,
+    overflow: 'hidden',
+    flexDirection: window.innerWidth < 768 ? 'column' : 'row',
+    gap: '1px',
+  };
+
+  // 响应式文字大小
+  const responsiveTextStyle = {
+    fontSize: 'clamp(14px, 2vw, 18px)', // 调整为更合理的响应式字体大小范围
+    fontWeight: '500',
+    color: 'rgb(2, 0, 0)',
+  };
+
   return (
-    <div style={friendsStyles.containerStyle}>
+    <div style={containerStyle}>
       {/* 顶部栏 */}
-      <div style={friendsStyles.headerStyle}>
-        <div style={friendsStyles.logoStyle}>C</div>
-        <div style={friendsStyles.contactInfoStyle}>
-          <span style={{ fontSize: '16px', fontWeight: '500', color: '#212529' }}>
+      <div style={headerStyle}>
+        {/* === 修改这里，用 <img> 标签替换 'F' === */}
+        <div style={logoStyle}>
+          <img
+            src="/logo.png" // 假设图片在 public/logo.png
+            alt="Logo"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              borderRadius: '8px',
+            }}
+          />
+        </div>
+        {/* === 结束修改 === */}
+
+        <div style={contactInfoStyle}>
+          <span style={responsiveTextStyle}> {/* 使用响应式字体样式 */}
             {contactInfo.name}
           </span>
-          <div style={friendsStyles.statusDotStyle(contactInfo.isOnline)}></div>
+          <div style={statusDotStyle(contactInfo.isOnline)}></div>
         </div>
-        <NavButton
-          onClick={handleRefreshPage}
-          title="好友列表"
-          isActive={true}
-        >
-          👥
-        </NavButton>
-        <NavButton
-          onClick={handleNavigateToChat}
-          title="聊天页面"
-        >
-          💬
-        </NavButton>
+        <div style={navButtonsContainerStyle}>
+          <NavButton
+            onClick={handleRefreshPage} // FriendsPage 内部的刷新函数
+            title="好友列表"
+            isActive={true} // 当前页面是好友列表，所以 active
+          >
+            👥 {/* Friends list icon */}
+          </NavButton>
+          <NavButton
+            onClick={onNavigateToChat} // 从 props 接收的导航到聊天页面函数
+            title="聊天页面"
+          >
+            💬 {/* Chat icon */}
+          </NavButton>
+        </div>
       </div>
 
       {/* 主内容区 */}
-      <div style={friendsStyles.mainContentStyle}>
+      <div style={mainContentStyle}>
         {/* 左侧面板 - 好友列表 */}
         <FriendsList
           friends={showSearchResults ? searchResults : friendsList}
@@ -258,8 +337,8 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
           onAddFriend={handleAddFriend}
         />
       </div>
-      
-      <FriendRequestNotification 
+
+      <FriendRequestNotification
         requests={receivedRequests}
         onAccept={handleAcceptRequest}
         onReject={handleRejectRequest}
