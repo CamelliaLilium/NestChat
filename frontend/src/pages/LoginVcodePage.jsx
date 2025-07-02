@@ -75,6 +75,7 @@ const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
 
       if (response.success === true || (response.token && response.user)) {
         api.setToken(response.token);
+        api.setUserEmail(response.user.email); // 保存用户邮箱
         showAlertMessage('登录成功！');
         setTimeout(() => {
           onLoginSuccess({

@@ -29,6 +29,7 @@ const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLo
       // 检查响应是否成功
       if (response.success === true || (response.token && response.user)) {
         api.setToken(response.token); // 保存token
+        api.setUserEmail(response.user.email); // 保存用户邮箱
         showAlertMessage('登录成功！');
         setTimeout(() => {
           onLoginSuccess({ 

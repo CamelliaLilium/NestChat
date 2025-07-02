@@ -4,6 +4,8 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const { spawn } = require('child_process');
+const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +15,62 @@ const io = socketIo(server, {
     methods: ["GET", "POST"]
   }
 });
+
+// 添加SQLite数据库支持
+let Database;
+let db;
+
+try {
+  // 尝试加载better-sqlite3，如果没有安装则使用内存存储
+  Database = require('better-sqlite3');
+  
+  // 初始化数据库
+  const dbPath = path.join(__dirname, 'server.db');
+  db = new Database(dbPath);
+  
+  // 创建表（如果不存在）
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS UserTable (
+      email VARCHAR(64) PRIMARY KEY,
+      username VARCHAR(32) NOT NULL,
+      pwdhash CHAR(64) NOT NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS FriendTable (
+      email1 VARCHAR(64),
+      email2 VARCHAR(64),
+      PRIMARY KEY (email1, email2),
+      FOREIGN KEY (email1) REFERENCES UserTable(email),
+      FOREIGN KEY (email2) REFERENCES UserTable(email)
+    );
+    
+    CREATE TABLE IF NOT EXISTS FriendRequest (
+      inviter VARCHAR(64),
+      invitee VARCHAR(64),
+      request_time REAL NOT NULL,
+      PRIMARY KEY (inviter, invitee),
+      FOREIGN KEY (inviter) REFERENCES UserTable(email),
+      FOREIGN KEY (invitee) REFERENCES UserTable(email)
+    );
+    
+    CREATE TABLE IF NOT EXISTS MessageTable (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender VARCHAR(64) NOT NULL,
+      receiver VARCHAR(64) NOT NULL,
+      content TEXT NOT NULL,
+      timestamp REAL NOT NULL,
+      FOREIGN KEY (sender) REFERENCES UserTable(email),
+      FOREIGN KEY (receiver) REFERENCES UserTable(email)
+    );
+  `);
+  
+  console.log('✅ 数据库连接成功');
+} catch (error) {
+  console.log('⚠️  未安装better-sqlite3，使用内存存储模式');
+  console.log('   要启用数据库功能，请运行: npm install better-sqlite3');
+  Database = null;
+  db = null;
+}
 
 // 基础配置
 app.use(cors());
@@ -39,10 +97,148 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
-// 内存数据存储（演示用）
+// 数据库操作函数
+const dbOperations = {
+  // 用户相关操作
+  findUser: (email) => {
+    if (!db) return null;
+    try {
+      const stmt = db.prepare('SELECT * FROM UserTable WHERE email = ?');
+      return stmt.get(email);
+    } catch (error) {
+      console.error('查找用户失败:', error);
+      return null;
+    }
+  },
+  
+  createUser: (email, username, password) => {
+    if (!db) return false;
+    try {
+      const pwdhash = crypto.createHash('sha256').update(password).digest('hex');
+      const stmt = db.prepare('INSERT INTO UserTable (email, username, pwdhash) VALUES (?, ?, ?)');
+      stmt.run(email, username, pwdhash);
+      return true;
+    } catch (error) {
+      console.error('创建用户失败:', error);
+      return false;
+    }
+  },
+  
+  verifyPassword: (email, password) => {
+    if (!db) return false;
+    try {
+      const pwdhash = crypto.createHash('sha256').update(password).digest('hex');
+      const stmt = db.prepare('SELECT * FROM UserTable WHERE email = ? AND pwdhash = ?');
+      return stmt.get(email, pwdhash) !== undefined;
+    } catch (error) {
+      console.error('验证密码失败:', error);
+      return false;
+    }
+  },
+  
+  // 好友相关操作
+  addFriend: (email1, email2) => {
+    if (!db) return false;
+    try {
+      const stmt = db.prepare('INSERT OR IGNORE INTO FriendTable (email1, email2) VALUES (?, ?), (?, ?)');
+      stmt.run(email1, email2, email2, email1);
+      return true;
+    } catch (error) {
+      console.error('添加好友失败:', error);
+      return false;
+    }
+  },
+  
+  getFriends: (email) => {
+    if (!db) return [];
+    try {
+      const stmt = db.prepare(`
+        SELECT u.email, u.username 
+        FROM UserTable u 
+        INNER JOIN FriendTable f ON u.email = f.email2 
+        WHERE f.email1 = ?
+      `);
+      return stmt.all(email);
+    } catch (error) {
+      console.error('获取好友列表失败:', error);
+      return [];
+    }
+  },
+  
+  // 好友请求相关操作
+  createFriendRequest: (inviter, invitee) => {
+    if (!db) return false;
+    try {
+      const stmt = db.prepare('INSERT OR IGNORE INTO FriendRequest (inviter, invitee, request_time) VALUES (?, ?, ?)');
+      stmt.run(inviter, invitee, Date.now() / 1000);
+      return true;
+    } catch (error) {
+      console.error('创建好友请求失败:', error);
+      return false;
+    }
+  },
+  
+  getFriendRequests: (email) => {
+    if (!db) return [];
+    try {
+      const stmt = db.prepare(`
+        SELECT u.email, u.username, fr.request_time
+        FROM FriendRequest fr
+        INNER JOIN UserTable u ON fr.inviter = u.email
+        WHERE fr.invitee = ?
+      `);
+      return stmt.all(email);
+    } catch (error) {
+      console.error('获取好友请求失败:', error);
+      return [];
+    }
+  },
+  
+  deleteFriendRequest: (inviter, invitee) => {
+    if (!db) return false;
+    try {
+      const stmt = db.prepare('DELETE FROM FriendRequest WHERE inviter = ? AND invitee = ?');
+      stmt.run(inviter, invitee);
+      return true;
+    } catch (error) {
+      console.error('删除好友请求失败:', error);
+      return false;
+    }
+  },
+  
+  // 消息相关操作
+  saveMessage: (sender, receiver, content) => {
+    if (!db) return false;
+    try {
+      const stmt = db.prepare('INSERT INTO MessageTable (sender, receiver, content, timestamp) VALUES (?, ?, ?, ?)');
+      stmt.run(sender, receiver, content, Date.now() / 1000);
+      return true;
+    } catch (error) {
+      console.error('保存消息失败:', error);
+      return false;
+    }
+  },
+  
+  getMessages: (user1, user2, limit = 50) => {
+    if (!db) return [];
+    try {
+      const stmt = db.prepare(`
+        SELECT * FROM MessageTable 
+        WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+        ORDER BY timestamp DESC LIMIT ?
+      `);
+      return stmt.all(user1, user2, user2, user1, limit).reverse();
+    } catch (error) {
+      console.error('获取消息失败:', error);
+      return [];
+    }
+  }
+};
+
+// 内存数据存储（当数据库不可用时使用）
 let users = [
-  { id: 1, email: 'alice@test.com', username: 'Alice', password: '123456' },
-  { id: 2, email: 'bob@test.com', username: 'Bob', password: '123456' }
+  { email: 'alice@test.com', username: 'Alice', password: '123456' },
+  { email: 'bob@test.com', username: 'Bob', password: '123456' }
 ];
 let messages = [];
 let onlineUsers = new Set();
@@ -53,17 +249,27 @@ app.post('/api/v1/auth/login', (req, res) => {
   const { email, password } = req.body;
   console.log('登录请求:', { email, password });
   
-  const user = users.find(u => u.email === email && u.password === password);
+  // 使用数据库或内存存储
+  let user = null;
+  if (db) {
+    // 数据库模式
+    const dbUser = dbOperations.findUser(email);
+    if (dbUser && dbOperations.verifyPassword(email, password)) {
+      user = dbUser;
+    }
+  } else {
+    // 内存模式
+    user = users.find(u => u.email === email && u.password === password);
+  }
   
   if (user) {
-    onlineUsers.add(user.id);
+    onlineUsers.add(user.email);
     res.json({ 
       success: true,
-      token: `fake-token-${user.id}`, 
+      token: `fake-token-${user.email}`, 
       user: { 
-        id: user.id, 
         email: user.email, 
-        name: user.username,  // 添加 name 字段
+        name: user.username,
         username: user.username 
       }
     });
@@ -107,7 +313,16 @@ app.post('/api/v1/auth/register', (req, res) => {
   }
 
   // 检查邮箱是否已存在
-  if (users.find(u => u.email === email)) {
+  let userExists = false;
+  if (db) {
+    // 数据库模式
+    userExists = dbOperations.findUser(email) !== null;
+  } else {
+    // 内存模式
+    userExists = users.find(u => u.email === email) !== undefined;
+  }
+  
+  if (userExists) {
     return res.status(400).json({ 
       success: false,
       error: '该邮箱已被注册',
@@ -147,14 +362,27 @@ app.post('/api/v1/auth/register', (req, res) => {
   }
 
   // 验证码正确，创建新用户
-  const newUser = {
-    id: users.length + 1,
-    email,
-    username: name,
-    password
-  };
+  let success = false;
+  if (db) {
+    // 数据库模式
+    success = dbOperations.createUser(email, name, password);
+  } else {
+    // 内存模式
+    const newUser = {
+      email,
+      username: name,
+      password
+    };
+    users.push(newUser);
+    success = true;
+  }
   
-  users.push(newUser);
+  if (!success) {
+    return res.status(500).json({ 
+      success: false,
+      error: '注册失败，请稍后重试'
+    });
+  }
   
   // 删除已使用的验证码
   verificationCodes.delete(email);
@@ -162,7 +390,6 @@ app.post('/api/v1/auth/register', (req, res) => {
   res.json({ 
     success: true,
     user: { 
-      id: newUser.id, 
       email, 
       name: name,
       username: name 
@@ -435,13 +662,248 @@ server.listen(PORT, () => {
   console.log('   python send_email.py <email> <code>  # 手动发送测试');
 });
 
-// 优雅关闭
-process.on('SIGINT', () => {
-  console.log('\n👋 服务器关闭中...');
-  server.close(() => {
-    console.log('✅ 服务器已关闭');
-    process.exit(0);
+// ====================== 好友管理API ======================
+// 获取好友列表
+app.get('/api/v1/friends', (req, res) => {
+  const userEmail = req.headers['user-email']; // 从请求头获取用户邮箱
+  
+  if (!userEmail) {
+    return res.status(401).json({ 
+      success: false,
+      error: '未授权访问' 
+    });
+  }
+  
+  let friends = [];
+  if (db) {
+    friends = dbOperations.getFriends(userEmail);
+  } else {
+    // 内存模式下的简单实现
+    friends = users.filter(u => u.email !== userEmail);
+  }
+  
+  res.json({ 
+    success: true,
+    friends: friends
   });
+});
+
+// 发送好友请求
+app.post('/api/v1/friends/request', (req, res) => {
+  const { friendEmail } = req.body;
+  const userEmail = req.headers['user-email'];
+  
+  if (!userEmail || !friendEmail) {
+    return res.status(400).json({ 
+      success: false,
+      error: '参数不完整' 
+    });
+  }
+  
+  if (userEmail === friendEmail) {
+    return res.status(400).json({ 
+      success: false,
+      error: '不能添加自己为好友' 
+    });
+  }
+  
+  // 检查目标用户是否存在
+  let targetUser = null;
+  if (db) {
+    targetUser = dbOperations.findUser(friendEmail);
+  } else {
+    targetUser = users.find(u => u.email === friendEmail);
+  }
+  
+  if (!targetUser) {
+    return res.status(404).json({ 
+      success: false,
+      error: '用户不存在' 
+    });
+  }
+  
+  // 创建好友请求
+  let success = false;
+  if (db) {
+    success = dbOperations.createFriendRequest(userEmail, friendEmail);
+  } else {
+    // 内存模式下直接添加为好友
+    success = true;
+  }
+  
+  if (success) {
+    res.json({ 
+      success: true,
+      message: '好友请求已发送' 
+    });
+  } else {
+    res.status(500).json({ 
+      success: false,
+      error: '发送好友请求失败' 
+    });
+  }
+});
+
+// 获取好友请求
+app.get('/api/v1/friends/requests', (req, res) => {
+  const userEmail = req.headers['user-email'];
+  
+  if (!userEmail) {
+    return res.status(401).json({ 
+      success: false,
+      error: '未授权访问' 
+    });
+  }
+  
+  let requests = [];
+  if (db) {
+    requests = dbOperations.getFriendRequests(userEmail);
+  }
+  
+  res.json({ 
+    success: true,
+    requests: requests
+  });
+});
+
+// 接受好友请求
+app.post('/api/v1/friends/accept', (req, res) => {
+  const { friendEmail } = req.body;
+  const userEmail = req.headers['user-email'];
+  
+  if (!userEmail || !friendEmail) {
+    return res.status(400).json({ 
+      success: false,
+      error: '参数不完整' 
+    });
+  }
+  
+  let success = false;
+  if (db) {
+    // 添加好友关系
+    success = dbOperations.addFriend(userEmail, friendEmail);
+    if (success) {
+      // 删除好友请求
+      dbOperations.deleteFriendRequest(friendEmail, userEmail);
+    }
+  } else {
+    success = true;
+  }
+  
+  if (success) {
+    res.json({ 
+      success: true,
+      message: '已接受好友请求' 
+    });
+  } else {
+    res.status(500).json({ 
+      success: false,
+      error: '接受好友请求失败' 
+    });
+  }
+});
+
+// 拒绝好友请求
+app.post('/api/v1/friends/reject', (req, res) => {
+  const { friendEmail } = req.body;
+  const userEmail = req.headers['user-email'];
+  
+  if (!userEmail || !friendEmail) {
+    return res.status(400).json({ 
+      success: false,
+      error: '参数不完整' 
+    });
+  }
+  
+  let success = false;
+  if (db) {
+    success = dbOperations.deleteFriendRequest(friendEmail, userEmail);
+  } else {
+    success = true;
+  }
+  
+  if (success) {
+    res.json({ 
+      success: true,
+      message: '已拒绝好友请求' 
+    });
+  } else {
+    res.status(500).json({ 
+      success: false,
+      error: '拒绝好友请求失败' 
+    });
+  }
+});
+
+// ====================== 消息API ======================
+// 获取聊天记录
+app.get('/api/v1/messages/:friendEmail', (req, res) => {
+  const { friendEmail } = req.params;
+  const userEmail = req.headers['user-email'];
+  
+  if (!userEmail) {
+    return res.status(401).json({ 
+      success: false,
+      error: '未授权访问' 
+    });
+  }
+  
+  let messages = [];
+  if (db) {
+    messages = dbOperations.getMessages(userEmail, friendEmail);
+  }
+  
+  res.json({ 
+    success: true,
+    messages: messages
+  });
+});
+
+// 发送消息
+app.post('/api/v1/messages', (req, res) => {
+  const { receiverEmail, content } = req.body;
+  const senderEmail = req.headers['user-email'];
+  
+  if (!senderEmail || !receiverEmail || !content) {
+    return res.status(400).json({ 
+      success: false,
+      error: '参数不完整' 
+    });
+  }
+  
+  let success = false;
+  if (db) {
+    success = dbOperations.saveMessage(senderEmail, receiverEmail, content);
+  } else {
+    // 内存模式
+    messages.push({
+      sender: senderEmail,
+      receiver: receiverEmail,
+      content: content,
+      timestamp: Date.now() / 1000
+    });
+    success = true;
+  }
+  
+  if (success) {
+    res.json({ 
+      success: true,
+      message: '消息发送成功' 
+    });
+    
+    // 通过Socket.IO广播消息给在线用户
+    io.emit('new_message', {
+      sender: senderEmail,
+      receiver: receiverEmail,
+      content: content,
+      timestamp: Date.now()
+    });
+  } else {
+    res.status(500).json({ 
+      success: false,
+      error: '消息发送失败' 
+    });
+  }
 });
 
 // 内存存储验证码（生产环境应使用Redis等）
@@ -609,7 +1071,14 @@ app.post('/api/v1/auth/login-with-code', (req, res) => {
   }
 
   // 验证码正确，查找用户
-  const user = users.find(u => u.email === email);
+  let user = null;
+  if (db) {
+    // 数据库模式
+    user = dbOperations.findUser(email);
+  } else {
+    // 内存模式
+    user = users.find(u => u.email === email);
+  }
   
   if (!user) {
     verificationCodes.delete(email);
@@ -621,16 +1090,28 @@ app.post('/api/v1/auth/login-with-code', (req, res) => {
 
   // 登录成功
   verificationCodes.delete(email);
-  onlineUsers.add(user.id);
+  onlineUsers.add(user.email);
   
   res.json({ 
     success: true,
-    token: `fake-token-${user.id}`, 
+    token: `fake-token-${user.email}`, 
     user: { 
-      id: user.id, 
       email: user.email, 
       name: user.username,
       username: user.username 
     }
+  });
+});
+
+// 优雅关闭
+process.on('SIGINT', () => {
+  console.log('\n👋 服务器关闭中...');
+  if (db) {
+    db.close();
+    console.log('📁 数据库连接已关闭');
+  }
+  server.close(() => {
+    console.log('✅ 服务器已关闭');
+    process.exit(0);
   });
 });

@@ -8,6 +8,7 @@ class ApiClient {
   constructor() {
     this.baseURL = API_BASE_URL;
     this.token = localStorage.getItem('auth_token');
+    this.userEmail = localStorage.getItem('user_email'); // 添加用户邮箱
   }
 
   setToken(token) {
@@ -18,6 +19,15 @@ class ApiClient {
       localStorage.removeItem('auth_token');
     }
   }
+  
+  setUserEmail(email) {
+    this.userEmail = email;
+    if (email) {
+      localStorage.setItem('user_email', email);
+    } else {
+      localStorage.removeItem('user_email');
+    }
+  }
 
   getHeaders() {
     const headers = {
@@ -26,6 +36,10 @@ class ApiClient {
     
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    
+    if (this.userEmail) {
+      headers['user-email'] = this.userEmail;
     }
     
     return headers;
@@ -128,9 +142,28 @@ class ApiClient {
     return this.request('/friends');
   }
 
-  async addFriend(friendId) {
-    return this.request(`/friends/${friendId}`, {
+  async sendFriendRequest(friendEmail) {
+    return this.request('/friends/request', {
       method: 'POST',
+      body: JSON.stringify({ friendEmail }),
+    });
+  }
+
+  async getFriendRequests() {
+    return this.request('/friends/requests');
+  }
+
+  async acceptFriendRequest(friendEmail) {
+    return this.request('/friends/accept', {
+      method: 'POST',
+      body: JSON.stringify({ friendEmail }),
+    });
+  }
+
+  async rejectFriendRequest(friendEmail) {
+    return this.request('/friends/reject', {
+      method: 'POST',
+      body: JSON.stringify({ friendEmail }),
     });
   }
 
@@ -141,14 +174,14 @@ class ApiClient {
   }
 
   // 聊天相关
-  async getChatMessages(contactId) {
-    return this.request(`/chat/messages?contact_id=${contactId}`);
+  async getChatMessages(friendEmail) {
+    return this.request(`/messages/${friendEmail}`);
   }
 
-  async sendMessage(receiverId, content, type = 'text') {
-    return this.request('/chat/messages', {
+  async sendMessage(receiverEmail, content) {
+    return this.request('/messages', {
       method: 'POST',
-      body: JSON.stringify({ receiver_id: receiverId, content, type }),
+      body: JSON.stringify({ receiverEmail, content }),
     });
   }
 
