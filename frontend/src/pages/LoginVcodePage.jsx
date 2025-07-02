@@ -16,43 +16,19 @@ const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
     }
 
     try {
-      console.log('开始发送登录验证码:', email); // 添加调试日志
-      
       const response = await api.sendVerificationCode(email);
-      
-      console.log('发送验证码响应:', response); // 添加调试日志
 
-      if (response.success === true) {
+      if (response.success) {
         setCodeSent(true);
-        showAlertMessage('验证码已发送到您的邮箱，请检查收件箱（包括垃圾邮件文件夹）');
-        
-        // 如果是开发环境，显示验证码
-        if (response.dev_code) {
-          console.log('开发环境验证码:', response.dev_code);
-        }
+        showAlertMessage('验证码已发送到您的邮箱');
+      } else if (response.error === 'USER_NOT_FOUND') {
+        showAlertMessage('该用户不存在，请注册');
       } else {
-        const errorMessage = response.error || response.message || '发送验证码失败';
-        
-        if (errorMessage.includes('用户不存在') || response.code === 'USER_NOT_FOUND') {
-          showAlertMessage('该用户不存在，请先注册');
-        } else if (errorMessage.includes('邮箱格式')) {
-          showAlertMessage('邮箱格式不正确，请检查后重试');
-        } else if (errorMessage.includes('Python') || errorMessage.includes('邮件发送服务')) {
-          showAlertMessage('邮件服务暂时不可用，请稍后重试');
-        } else {
-          showAlertMessage(errorMessage);
-        }
+        showAlertMessage(response.error || '发送验证码失败');
       }
     } catch (error) {
       console.error('发送验证码出错:', error);
-      
-      if (error.message.includes('网络连接失败')) {
-        showAlertMessage('网络连接失败，请确保后端服务器已启动');
-      } else if (error.message.includes('服务器返回数据格式错误')) {
-        showAlertMessage('服务器响应异常，请联系管理员');
-      } else {
-        showAlertMessage(`发送验证码失败: ${error.message}`);
-      }
+      showAlertMessage('发送验证码失败');
     }
   };
 
@@ -66,50 +42,46 @@ const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
       return;
     }
 
-    try {
-      console.log('开始验证码登录:', { email, verificationCode }); // 添加调试日志
-      
-      const response = await api.loginWithCode(email, verificationCode);
-      
-      console.log('验证码登录响应:', response); // 添加调试日志
+  try {
+    const response = await api.loginWithCode(email, verificationCode);
 
-      if (response.success === true || (response.token && response.user)) {
-        api.setToken(response.token);
-        api.setUserEmail(response.user.email); // 保存用户邮箱
-        showAlertMessage('登录成功！');
-        setTimeout(() => {
-          onLoginSuccess({
-            email: response.user.email,
-            name: response.user.name || response.user.username, // 兼容两种字段名
-            token: response.token
-          });
-        }, 1000);
-      } else {
-        const errorMessage = response.error || response.message || '登录失败';
-        
-        if (errorMessage.includes('用户不存在') || response.code === 'USER_NOT_FOUND') {
-          showAlertMessage('该用户不存在，请先注册');
-        } else if (errorMessage.includes('验证码错误') || response.code === 'VCODE_ERROR') {
-          showAlertMessage('验证码错误，请检查后重试');
-        } else if (errorMessage.includes('验证码已过期') || response.code === 'VCODE_EXPIRED') {
-          showAlertMessage('验证码已过期，请重新获取');
-          setCodeSent(false);
-        } else {
-          showAlertMessage(errorMessage);
-        }
-      }
-    } catch (error) {
-      console.error('登录出错:', error);
+    if (response.success === true || (response.token && response.user)) {
+      api.setToken(response.token);
+      api.setUserEmail(response.user.email); // 保存用户邮箱
+      showAlertMessage('登录成功！');
+      setTimeout(() => {
+        onLoginSuccess({
+          email: response.user.email,
+          name: response.user.name || response.user.username, // 兼容两种字段名
+          token: response.token
+        });
+      }, 1000);
+    } else {
+      const errorMessage = response.error || response.message || '登录失败';
       
-      if (error.message.includes('网络连接失败')) {
-        showAlertMessage('网络连接失败，请确保后端服务器已启动');
-      } else if (error.message.includes('服务器返回数据格式错误')) {
-        showAlertMessage('服务器响应异常，请联系管理员');
+      if (errorMessage.includes('用户不存在') || response.code === 'USER_NOT_FOUND') {
+        showAlertMessage('该用户不存在，请先注册');
+      } else if (errorMessage.includes('验证码错误') || response.code === 'VCODE_ERROR') {
+        showAlertMessage('验证码错误，请检查后重试');
+      } else if (errorMessage.includes('验证码已过期') || response.code === 'VCODE_EXPIRED') {
+        showAlertMessage('验证码已过期，请重新获取');
+        setCodeSent(false);
       } else {
-        showAlertMessage(`登录失败: ${error.message}`);
+        showAlertMessage(errorMessage);
       }
     }
-  };
+  } catch (error) {
+    console.error('登录出错:', error);
+    
+    if (error.message.includes('网络连接失败')) {
+      showAlertMessage('网络连接失败，请确保后端服务器已启动');
+    } else if (error.message.includes('服务器返回数据格式错误')) {
+      showAlertMessage('服务器响应异常，请联系管理员');
+    } else {
+      showAlertMessage(`登录失败: ${error.message}`);
+    }
+  }
+};
 
   const handlePasswordLogin = () => {
     onNavigateToLogin();
@@ -122,7 +94,12 @@ const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
-    backgroundColor: '#fce4ec',
+    // === 修改这里，添加背景图片 ===
+    backgroundImage: 'url("/LoginBack.png")', // 假设图片在 public/images 目录下
+    backgroundSize: 'cover', // 覆盖整个容器
+    backgroundRepeat: 'no-repeat', // 不重复平铺
+    backgroundPosition: 'center', // 居中显示
+    // === 结束修改 ===
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     padding: '20px',
     minWidth: '1200px', // 桌面端最小宽度
@@ -131,7 +108,7 @@ const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
   };
 
   const formContainerStyle = {
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(252, 252, 252, 0.8)',
     borderRadius: '16px',
     padding: '50px 60px', // 增加内边距
     boxShadow: '0 8px 32px rgba(233, 30, 99, 0.15)',

@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import VideoBubble from '../components/VideoBubble.jsx'; // Changed from ChatBubble to VideoBubble
+import VideoBubble from '../components/VideoBubble.jsx';
 import ChatInputBar from '../components/ChatInputBar.jsx';
 import ChatListPage from '../components/ChatListPage.jsx';
 import VideoCallModal from '../components/VideoCallModal.jsx';
-import VoiceChatModal from '../components/VoiceChat.jsx'; // 引入新的 VoiceChatModal 组件
+import VoiceChatModal from '../components/VoiceChat.jsx';
 
 const ChatPage = ({ onNavigateToFriends, currentUser }) => {
   // 模拟不同用户的聊天数据
@@ -24,33 +24,29 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     ],
   });
 
-  const [currentChatId, setCurrentChatId] = useState(1); // Current chat ID
-  const [messages, setMessages] = useState(allChats[currentChatId]); // Current chat messages
-  const [isVideoCallOpen, setIsVideoCallOpen] = useState(false); // Video call modal state
-  const [isChatListOpen, setIsChatListOpen] = useState(false); // ChatList panel open/close state
-  const [isVoiceChatOpen, setIsVoiceChatOpen] = useState(false); // Voice chat modal open/close state
+  const [currentChatId, setCurrentChatId] = useState(1);
+  const [messages, setMessages] = useState(allChats[currentChatId]);
+  const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
+  const [isChatListOpen, setIsChatListOpen] = useState(false);
+  const [isVoiceChatOpen, setIsVoiceChatOpen] = useState(false);
 
   const [contactInfo, setContactInfo] = useState({
-    name: "张三", // Contact name
-    isOnline: true, // Contact online status
+    name: "张三",
+    isOnline: true,
   });
 
-  const messagesEndRef = useRef(null); // Ref for scrolling to the bottom of messages
+  const messagesEndRef = useRef(null);
 
-  // Function to scroll to the bottom of the messages list
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Effect to scroll to bottom when messages update
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Effect to update messages and contact info when currentChatId or allChats change
   useEffect(() => {
-    setMessages(allChats[currentChatId] || []); // Update current chat messages
-    // Update contact info based on chat ID
+    setMessages(allChats[currentChatId] || []);
     const contacts = {
       1: { name: "张三", isOnline: true },
       2: { name: "李四", isOnline: false },
@@ -59,33 +55,31 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     setContactInfo(contacts[currentChatId] || { name: "未知用户", isOnline: false });
   }, [currentChatId, allChats]);
 
-  // Handle sending a text message
   const handleSendMessage = (messageText) => {
     const newMessage = {
-      id: Date.now(), // Unique ID for the message
-      type: 'text', // Message type: text
-      content: messageText, // Message content
-      isOwn: true, // Flag if the message is sent by the current user
-      timestamp: new Date().toLocaleTimeString('zh-CN', { // Current time
+      id: Date.now(),
+      type: 'text',
+      content: messageText,
+      isOwn: true,
+      timestamp: new Date().toLocaleTimeString('zh-CN', {
         hour: '2-digit',
         minute: '2-digit'
       }),
-      avatar: currentUser?.avatar || "1.png" // Current user's avatar
+      avatar: currentUser?.avatar || "1.png"
     };
-    setMessages(prev => [...prev, newMessage]); // Add new message to the list
+    setMessages(prev => [...prev, newMessage]);
   };
 
-  // Handle video call initiation
   const handleVideoCall = () => {
-    setIsVideoCallOpen(true); // Open video call modal
+    setIsVideoCallOpen(true);
   };
 
-  // Handle sending an image (simulated)
+  //___________________________________________________________________________
   const handleSendImage = () => {
     const imageMessage = {
       id: Date.now(),
-      type: 'text', // Message type: text (image as text placeholder)
-      content: "📷 [图片]", // Image placeholder text
+      type: 'text',
+      content: "📷 [图片]",
       isOwn: true,
       timestamp: new Date().toLocaleTimeString('zh-CN', {
         hour: '2-digit',
@@ -95,19 +89,17 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     };
     setMessages(prev => [...prev, imageMessage]);
   };
+  //___________________________________________________________________________ 
 
-  // Handle sending voice (opens voice chat modal)
   const handleSendVoice = () => {
-    setIsVoiceChatOpen(true); // Open voice chat modal
+    setIsVoiceChatOpen(true);
   };
 
-  // Callback for when voice message is successfully sent from VoiceChatModal
   const handleVoiceMessageSent = (audioUrl) => {
-    // In a real application, audioUrl would be sent to the backend
     const voiceMessage = {
       id: Date.now(),
-      type: 'audio', // Message type: audio
-      content: audioUrl, // Audio URL
+      type: 'audio',
+      content: audioUrl,
       isOwn: true,
       timestamp: new Date().toLocaleTimeString('zh-CN', {
         hour: '2-digit',
@@ -115,60 +107,55 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
       }),
       avatar: currentUser?.avatar || "1.png"
     };
-    setMessages(prev => [...prev, voiceMessage]); // Add voice message to the list
-    setIsVoiceChatOpen(false); // Close voice chat modal
+    setMessages(prev => [...prev, voiceMessage]);
+    setIsVoiceChatOpen(false);
     console.log("Voice message sent, URL:", audioUrl);
   };
 
-  // Navigate to friends list page
   const handleNavigateToFriends = () => {
-    onNavigateToFriends(); // Call parent component's navigation callback
+    onNavigateToFriends();
   };
 
-  // Refresh chat page
   const handleRefreshChat = () => {
-    window.location.reload(); // Reload the entire page
+    window.location.reload();
   };
 
-  // Switch chat contact
   const handleSwitchChat = (chatId) => {
-    setCurrentChatId(chatId); // Set current chat ID
-    setIsChatListOpen(false); // Close ChatList panel after switching chat
+    setCurrentChatId(chatId);
+    setIsChatListOpen(false);
   };
 
-  // Desktop adaptation: horizontal layout container style
   const containerStyle = {
     display: 'flex',
-    flexDirection: 'row', // Horizontal layout
-    height: '100vh', // Occupy full viewport height
-    backgroundColor: '#fce4ec', // Background color
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', // Font family
-    minWidth: '1200px', // Minimum width for desktop
-    width: '100vw', // Occupy full viewport width
-    boxSizing: 'border-box', // Box model
+    flexDirection: 'row',
+    height: '100vh',
+    backgroundImage: 'url("/ChatBack.png")', // 使用 assets 下的 ChatBack.png 作为背景
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'center',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    minWidth: '1200px',
+    width: '100vw',
+    boxSizing: 'border-box',
   };
 
-  // Left main chat area style (dynamically adjusts based on isChatListOpen)
   const leftPanelStyle = {
-    flex: '1', // Occupy available space
+    flex: '1',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: '#ffffff',
-    minWidth: '600px', // Minimum width
-    // Dynamically adjust max-width based on isChatListOpen
+    backgroundColor: 'rgba(255,255,255,0.35)', // 半透明白色
+    minWidth: '600px',
     maxWidth: isChatListOpen ? 'calc(100vw - 350px)' : '100vw',
   };
 
-  // Right ChatList panel style
   const rightPanelStyle = {
-    width: '350px', // Fixed width
-    backgroundColor: '#ffffff',
-    borderLeft: '1px solid #f8bbd9', // Left border
-    display: isChatListOpen ? 'flex' : 'none', // Show or hide based on isChatListOpen
+    width: '350px',
+    backgroundColor: 'rgba(255,255,255,0.2)', // 半透明白色
+    //borderLeft: '1px solid #f8bbd9',
+    display: isChatListOpen ? 'flex' : 'none',
     flexDirection: 'column',
   };
 
-  // Header bar style
   const headerStyle = {
     display: 'flex',
     alignItems: 'center',
@@ -177,30 +164,28 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     borderBottom: '1px solid #f8bbd9',
     boxShadow: '0 2px 4px rgba(233, 30, 99, 0.1)',
     minHeight: '70px',
+    justifyContent: 'space-between',
   };
 
-  // Logo style
+  // === 修改 logoStyle ===
   const logoStyle = {
     width: '40px',
     height: '40px',
-    backgroundColor: '#e91e63',
+    backgroundColor: '#e91e63', // 背景色保留，或者改为透明 'transparent'
     borderRadius: '8px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#ffffff',
-    fontSize: '18px',
-    fontWeight: 'bold',
+    // 移除了 color 和 fontSize，因为我们将用图片替代文本
     marginRight: '16px',
+    overflow: 'hidden', // 确保图片超出边界时被裁剪
   };
 
-  // Contact info style
   const contactInfoStyle = {
     display: 'flex',
     alignItems: 'center',
   };
 
-  // Online status dot style
   const statusDotStyle = {
     width: '8px',
     height: '8px',
@@ -209,7 +194,6 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     marginLeft: '8px',
   };
 
-  // Nav button common style
   const navButtonStyle = {
     display: 'flex',
     justifyContent: 'center',
@@ -221,26 +205,23 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     cursor: 'pointer',
     fontSize: '18px',
     transition: 'all 0.2s ease',
-    margin: '0', // Ensure no extra margin, gap controlled by container
+    margin: '0',
   };
 
-  // NavButtons container style, for centering these two buttons
   const navButtonsContainerStyle = {
     display: 'flex',
     alignItems: 'center',
-    gap: '15px', // Gap between buttons
+    gap: '15px',
   };
 
-  // Chat area style
   const chatAreaStyle = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    padding: '0 20px',
+    padding: '0 20%',
   };
 
-  // Messages scroll area style
   const messagesScrollStyle = {
     flex: 1,
     overflowY: 'auto',
@@ -250,10 +231,9 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     gap: '12px',
   };
 
-  // ChatList toggle button style
   const chatListToggleStyle = {
     position: 'fixed',
-    right: isChatListOpen ? '360px' : '20px', // Adjust position based on ChatList panel state
+    right: isChatListOpen ? 'calc(350px + 2vw)' : '2vw',
     top: '50%',
     transform: 'translateY(-50%)',
     width: '50px',
@@ -272,7 +252,6 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     fontSize: '18px',
   };
 
-  // NavButton sub-component
   const NavButton = ({ onClick, children, title, isActive = false }) => {
     const [isHovered, setIsHovered] = useState(false);
 
@@ -281,16 +260,16 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
         style={{
           ...navButtonStyle,
           backgroundColor: isActive
-            ? '#fce4ec' // Active state background color
+            ? '#fce4ec'
             : isHovered
-              ? '#f8bbd9' // Hover state background color
-              : 'transparent', // Default transparent background
-          color: isActive ? '#e91e63' : '#424242', // Active or default text color
+              ? '#f8bbd9'
+              : 'transparent',
+          color: isActive ? '#e91e63' : '#424242',
         }}
-        onMouseEnter={() => setIsHovered(true)} // Set hover state on mouse enter
-        onMouseLeave={() => setIsHovered(false)} // Clear hover state on mouse leave
-        onClick={onClick} // Click event
-        title={title} // Mouse hover tooltip
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onClick={onClick}
+        title={title}
       >
         {children}
       </button>
@@ -303,23 +282,33 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
       <div style={leftPanelStyle}>
         {/* Top bar */}
         <div style={headerStyle}>
-          <div style={logoStyle}>C</div>
-          <div style={contactInfoStyle}> {/* Removed flex:1, so it only occupies content space */}
-            <span style={{ fontSize: '16px', fontWeight: '500', color: '#212529' }}>
-              {contactInfo.name} {/* Display contact name */}
-            </span>
-            <div style={statusDotStyle}></div> {/* Display online status dot */}
+          {/* === 修改这里，用 <img> 标签替换 'C' === */}
+          <div style={logoStyle}>
+            <img
+              src="/logo.png" // 假设图片在 public/images 目录下
+              alt="Logo"
+              style={{
+                width: '100%', // 让图片填充 logoStyle 的 div
+                height: '100%',
+                objectFit: 'cover', // 确保图片覆盖整个区域，可能会裁剪
+                borderRadius: '8px', // 与 logoStyle 的圆角保持一致
+              }}
+            />
           </div>
-          {/* Flexible centering container, occupies remaining space and centers nav buttons */}
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <div style={navButtonsContainerStyle}> {/* Navigation buttons container */}
-              <NavButton onClick={handleNavigateToFriends} title="好友列表">
-                👥 {/* Friends list icon */}
-              </NavButton>
-              <NavButton onClick={handleRefreshChat} title="刷新聊天" isActive={true}>
-                💬 {/* Chat icon (current page active) */}
-              </NavButton>
-            </div>
+          {/* === 结束修改 === */}
+          <div style={contactInfoStyle}>
+            <span style={{ fontSize: '30px', fontWeight: '500', color: '#212529' }}>
+              {contactInfo.name}
+            </span>
+            <div style={statusDotStyle}></div>
+          </div>
+          <div style={navButtonsContainerStyle}>
+            <NavButton onClick={handleNavigateToFriends} title="好友列表">
+              👥
+            </NavButton>
+            <NavButton onClick={handleRefreshChat} title="刷新聊天" isActive={true}>
+              💬
+            </NavButton>
           </div>
         </div>
 
@@ -327,25 +316,24 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
         <div style={chatAreaStyle}>
           <div style={messagesScrollStyle}>
             {messages.map((message) => (
-              <VideoBubble // Changed from ChatBubble to VideoBubble
+              <VideoBubble
                 key={message.id}
-                // Pass different props based on message type
-                message={message.type === 'audio' ? null : message.content} // Text message passes content
-                audioUrl={message.type === 'audio' ? message.content : null} // Audio message passes audioUrl
+                message={message.type === 'audio' ? null : message.content}
+                audioUrl={message.type === 'audio' ? message.content : null}
                 isOwn={message.isOwn}
                 timestamp={message.timestamp}
                 avatar={message.avatar}
-                type={message.type} // Pass message type
+                type={message.type}
               />
             ))}
-            <div ref={messagesEndRef} /> {/* Empty div for scrolling to bottom */}
+            <div ref={messagesEndRef} />
           </div>
 
           <ChatInputBar
             onSendMessage={handleSendMessage}
             onVideoCall={handleVideoCall}
             onSendImage={handleSendImage}
-            onSendVoice={handleSendVoice} // Call function to handle voice sending
+            onSendVoice={handleSendVoice}
           />
         </div>
       </div>
@@ -353,36 +341,36 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
       {/* Right ChatList panel */}
       <div style={rightPanelStyle}>
         <ChatListPage
-          isVisible={true} // Always visible (controlled by parent's display)
-          onClose={() => setIsChatListOpen(false)} // Close ChatList panel
-          onSwitchChat={handleSwitchChat} // Switch chat contact
+          isVisible={true}
+          onClose={() => setIsChatListOpen(false)}
+          onSwitchChat={handleSwitchChat}
         />
       </div>
 
       {/* ChatList toggle button */}
       <button
         style={chatListToggleStyle}
-        onClick={() => setIsChatListOpen(!isChatListOpen)} // Click to toggle ChatList panel visibility
-        title={isChatListOpen ? "关闭消息列表" : "打开消息列表"} // Mouse hover tooltip
+        onClick={() => setIsChatListOpen(!isChatListOpen)}
+        title={isChatListOpen ? "关闭消息列表" : "打开消息列表"}
       >
-        {isChatListOpen ? '❯' : '❮'} {/* Display different arrow icon based on state */}
+        {isChatListOpen ? '❯' : '❮'}
       </button>
 
       {/* Video call modal */}
       <VideoCallModal
-        isOpen={isVideoCallOpen} // Control video call modal visibility
-        onClose={() => setIsVideoCallOpen(false)} // Close video call modal
-        contactName={contactInfo.name} // Pass contact name
+        isOpen={isVideoCallOpen}
+        onClose={() => setIsVideoCallOpen(false)}
+        contactName={contactInfo.name}
       />
 
       {/* Voice chat modal */}
       <VoiceChatModal
-        isOpen={isVoiceChatOpen} // Control voice chat modal visibility
-        onClose={() => setIsVoiceChatOpen(false)} // Close voice chat modal
-        onSendVoice={handleVoiceMessageSent} // Pass voice sending callback
+        isOpen={isVoiceChatOpen}
+        onClose={() => setIsVoiceChatOpen(false)}
+        onSendVoice={handleVoiceMessageSent}
       />
     </div>
   );
 };
 
-export default ChatPage; // Export ChatPage component
+export default ChatPage;

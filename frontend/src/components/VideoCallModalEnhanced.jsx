@@ -273,7 +273,7 @@ const VideoCallModalEnhanced = ({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(233, 30, 99, 0.8)',
+    backgroundColor: 'rgba(255, 251, 120, 0.18)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

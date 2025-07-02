@@ -4,6 +4,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const { spawn } = require('child_process');
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const crypto = require('crypto');
 
@@ -16,65 +17,95 @@ const io = socketIo(server, {
   }
 });
 
-// 添加SQLite数据库支持
-let Database;
-let db;
-
-try {
-  // 尝试加载better-sqlite3，如果没有安装则使用内存存储
-  Database = require('better-sqlite3');
-  
-  // 初始化数据库
-  const dbPath = path.join(__dirname, 'server.db');
-  db = new Database(dbPath);
-  
-  // 创建表（如果不存在）
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS UserTable (
-      email VARCHAR(64) PRIMARY KEY,
-      username VARCHAR(32) NOT NULL,
-      pwdhash CHAR(64) NOT NULL
-    );
-    
-    CREATE TABLE IF NOT EXISTS FriendTable (
-      email1 VARCHAR(64),
-      email2 VARCHAR(64),
-      PRIMARY KEY (email1, email2),
-      FOREIGN KEY (email1) REFERENCES UserTable(email),
-      FOREIGN KEY (email2) REFERENCES UserTable(email)
-    );
-    
-    CREATE TABLE IF NOT EXISTS FriendRequest (
-      inviter VARCHAR(64),
-      invitee VARCHAR(64),
-      request_time REAL NOT NULL,
-      PRIMARY KEY (inviter, invitee),
-      FOREIGN KEY (inviter) REFERENCES UserTable(email),
-      FOREIGN KEY (invitee) REFERENCES UserTable(email)
-    );
-    
-    CREATE TABLE IF NOT EXISTS MessageTable (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sender VARCHAR(64) NOT NULL,
-      receiver VARCHAR(64) NOT NULL,
-      content TEXT NOT NULL,
-      timestamp REAL NOT NULL,
-      FOREIGN KEY (sender) REFERENCES UserTable(email),
-      FOREIGN KEY (receiver) REFERENCES UserTable(email)
-    );
-  `);
-  
-  console.log('✅ 数据库连接成功');
-} catch (error) {
-  console.log('⚠️  未安装better-sqlite3，使用内存存储模式');
-  console.log('   要启用数据库功能，请运行: npm install better-sqlite3');
-  Database = null;
-  db = null;
-}
-
 // 基础配置
 app.use(cors());
 app.use(express.json());
+
+// 数据库连接
+const dbPath = path.join(__dirname, 'server.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('数据库连接失败:', err.message);
+  } else {
+    console.log('✅ 数据库连接成功');
+    // 初始化数据库表
+    initializeDatabase();
+  }
+});
+
+// 初始化数据库表
+function initializeDatabase() {
+  // 创建用户表
+  db.serialize(() => {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS UserTable (
+        email VARCHAR(64) PRIMARY KEY,
+        username VARCHAR(32) NOT NULL,
+        pwdhash CHAR(64) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    db.run(`
+      CREATE TABLE IF NOT EXISTS FriendTable (
+        email1 VARCHAR(64),
+        email2 VARCHAR(64),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (email1, email2),
+        FOREIGN KEY (email1) REFERENCES UserTable(email),
+        FOREIGN KEY (email2) REFERENCES UserTable(email)
+      )
+    `);
+    
+    db.run(`
+      CREATE TABLE IF NOT EXISTS FriendRequest (
+        inviter VARCHAR(64),
+        invitee VARCHAR(64),
+        request_time REAL NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (inviter, invitee),
+        FOREIGN KEY (inviter) REFERENCES UserTable(email),
+        FOREIGN KEY (invitee) REFERENCES UserTable(email)
+      )
+    `);
+    
+    db.run(`
+      CREATE TABLE IF NOT EXISTS MessageTable (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender VARCHAR(64) NOT NULL,
+        receiver VARCHAR(64) NOT NULL,
+        content TEXT NOT NULL,
+        timestamp REAL NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (sender) REFERENCES UserTable(email),
+        FOREIGN KEY (receiver) REFERENCES UserTable(email)
+      )
+    `);
+    
+    console.log('✅ 数据库表初始化完成');
+  });
+}
+
+// 工具函数：生成密码哈希
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+// 工具函数：从数据库获取用户
+function getUserFromDb(email, callback) {
+  db.get('SELECT * FROM UserTable WHERE email = ?', [email], callback);
+}
+
+// 工具函数：创建新用户
+function createUser(email, username, password, callback) {
+  const pwdhash = hashPassword(password);
+  db.run(
+    'INSERT INTO UserTable (email, username, pwdhash) VALUES (?, ?, ?)',
+    [email, username, pwdhash],
+    callback
+  );
+}
 
 // 健康检查端点
 app.get('/', (req, res) => {
@@ -88,160 +119,25 @@ app.get('/', (req, res) => {
 
 // API健康检查
 app.get('/api/v1/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    service: 'chat-app-backend',
-    users_count: users.length,
-    online_users: onlineUsers.size,
-    messages_count: messages.length
+  // 从数据库获取用户数量
+  db.get('SELECT COUNT(*) as count FROM UserTable', (err, result) => {
+    const userCount = err ? 0 : result.count;
+    res.json({
+      status: 'healthy',
+      service: 'chat-app-backend',
+      users_count: userCount,
+      online_users: onlineUsers.size,
+      messages_count: messages.length
+    });
   });
 });
 
-// 数据库操作函数
-const dbOperations = {
-  // 用户相关操作
-  findUser: (email) => {
-    if (!db) return null;
-    try {
-      const stmt = db.prepare('SELECT * FROM UserTable WHERE email = ?');
-      return stmt.get(email);
-    } catch (error) {
-      console.error('查找用户失败:', error);
-      return null;
-    }
-  },
-  
-  createUser: (email, username, password) => {
-    if (!db) return false;
-    try {
-      const pwdhash = crypto.createHash('sha256').update(password).digest('hex');
-      const stmt = db.prepare('INSERT INTO UserTable (email, username, pwdhash) VALUES (?, ?, ?)');
-      stmt.run(email, username, pwdhash);
-      return true;
-    } catch (error) {
-      console.error('创建用户失败:', error);
-      return false;
-    }
-  },
-  
-  verifyPassword: (email, password) => {
-    if (!db) return false;
-    try {
-      const pwdhash = crypto.createHash('sha256').update(password).digest('hex');
-      const stmt = db.prepare('SELECT * FROM UserTable WHERE email = ? AND pwdhash = ?');
-      return stmt.get(email, pwdhash) !== undefined;
-    } catch (error) {
-      console.error('验证密码失败:', error);
-      return false;
-    }
-  },
-  
-  // 好友相关操作
-  addFriend: (email1, email2) => {
-    if (!db) return false;
-    try {
-      const stmt = db.prepare('INSERT OR IGNORE INTO FriendTable (email1, email2) VALUES (?, ?), (?, ?)');
-      stmt.run(email1, email2, email2, email1);
-      return true;
-    } catch (error) {
-      console.error('添加好友失败:', error);
-      return false;
-    }
-  },
-  
-  getFriends: (email) => {
-    if (!db) return [];
-    try {
-      const stmt = db.prepare(`
-        SELECT u.email, u.username 
-        FROM UserTable u 
-        INNER JOIN FriendTable f ON u.email = f.email2 
-        WHERE f.email1 = ?
-      `);
-      return stmt.all(email);
-    } catch (error) {
-      console.error('获取好友列表失败:', error);
-      return [];
-    }
-  },
-  
-  // 好友请求相关操作
-  createFriendRequest: (inviter, invitee) => {
-    if (!db) return false;
-    try {
-      const stmt = db.prepare('INSERT OR IGNORE INTO FriendRequest (inviter, invitee, request_time) VALUES (?, ?, ?)');
-      stmt.run(inviter, invitee, Date.now() / 1000);
-      return true;
-    } catch (error) {
-      console.error('创建好友请求失败:', error);
-      return false;
-    }
-  },
-  
-  getFriendRequests: (email) => {
-    if (!db) return [];
-    try {
-      const stmt = db.prepare(`
-        SELECT u.email, u.username, fr.request_time
-        FROM FriendRequest fr
-        INNER JOIN UserTable u ON fr.inviter = u.email
-        WHERE fr.invitee = ?
-      `);
-      return stmt.all(email);
-    } catch (error) {
-      console.error('获取好友请求失败:', error);
-      return [];
-    }
-  },
-  
-  deleteFriendRequest: (inviter, invitee) => {
-    if (!db) return false;
-    try {
-      const stmt = db.prepare('DELETE FROM FriendRequest WHERE inviter = ? AND invitee = ?');
-      stmt.run(inviter, invitee);
-      return true;
-    } catch (error) {
-      console.error('删除好友请求失败:', error);
-      return false;
-    }
-  },
-  
-  // 消息相关操作
-  saveMessage: (sender, receiver, content) => {
-    if (!db) return false;
-    try {
-      const stmt = db.prepare('INSERT INTO MessageTable (sender, receiver, content, timestamp) VALUES (?, ?, ?, ?)');
-      stmt.run(sender, receiver, content, Date.now() / 1000);
-      return true;
-    } catch (error) {
-      console.error('保存消息失败:', error);
-      return false;
-    }
-  },
-  
-  getMessages: (user1, user2, limit = 50) => {
-    if (!db) return [];
-    try {
-      const stmt = db.prepare(`
-        SELECT * FROM MessageTable 
-        WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
-        ORDER BY timestamp DESC LIMIT ?
-      `);
-      return stmt.all(user1, user2, user2, user1, limit).reverse();
-    } catch (error) {
-      console.error('获取消息失败:', error);
-      return [];
-    }
-  }
-};
-
-// 内存数据存储（当数据库不可用时使用）
-let users = [
-  { email: 'alice@test.com', username: 'Alice', password: '123456' },
-  { email: 'bob@test.com', username: 'Bob', password: '123456' }
-];
+// 内存数据存储（临时数据）
 let messages = [];
 let onlineUsers = new Set();
+
+// 验证码存储（临时）
+let verificationCodes = new Map();
 
 // ====================== 认证API ======================
 // 登录接口
@@ -249,37 +145,38 @@ app.post('/api/v1/auth/login', (req, res) => {
   const { email, password } = req.body;
   console.log('登录请求:', { email, password });
   
-  // 使用数据库或内存存储
-  let user = null;
-  if (db) {
-    // 数据库模式
-    const dbUser = dbOperations.findUser(email);
-    if (dbUser && dbOperations.verifyPassword(email, password)) {
-      user = dbUser;
+  // 从数据库查找用户
+  getUserFromDb(email, (err, user) => {
+    if (err) {
+      console.error('数据库查询错误:', err);
+      return res.status(500).json({ 
+        success: false,
+        error: '服务器内部错误' 
+      });
     }
-  } else {
-    // 内存模式
-    user = users.find(u => u.email === email && u.password === password);
-  }
-  
-  if (user) {
-    onlineUsers.add(user.email);
-    res.json({ 
-      success: true,
-      token: `fake-token-${user.email}`, 
-      user: { 
-        email: user.email, 
-        name: user.username,
-        username: user.username 
-      }
-    });
-  } else {
-    res.status(401).json({ 
-      success: false,
-      error: '邮箱或密码错误',
-      message: '邮箱或密码错误'
-    });
-  }
+    
+    if (user && user.pwdhash === hashPassword(password)) {
+      // 登录成功
+      const userId = user.email; // 使用email作为用户ID
+      onlineUsers.add(userId);
+      res.json({ 
+        success: true,
+        token: `fake-token-${Date.now()}`, 
+        user: { 
+          id: userId, 
+          email: user.email, 
+          name: user.username,
+          username: user.username 
+        }
+      });
+    } else {
+      res.status(401).json({ 
+        success: false,
+        error: '邮箱或密码错误',
+        message: '邮箱或密码错误'
+      });
+    }
+  });
 });
 
 // 注册接口
@@ -313,145 +210,172 @@ app.post('/api/v1/auth/register', (req, res) => {
   }
 
   // 检查邮箱是否已存在
-  let userExists = false;
-  if (db) {
-    // 数据库模式
-    userExists = dbOperations.findUser(email) !== null;
-  } else {
-    // 内存模式
-    userExists = users.find(u => u.email === email) !== undefined;
-  }
-  
-  if (userExists) {
-    return res.status(400).json({ 
-      success: false,
-      error: '该邮箱已被注册',
-      code: 'USER_EXISTS'
-    });
-  }
+  getUserFromDb(email, (err, existingUser) => {
+    if (err) {
+      console.error('数据库查询错误:', err);
+      return res.status(500).json({ 
+        success: false,
+        error: '服务器内部错误' 
+      });
+    }
+    
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false,
+        error: '该邮箱已被注册',
+        code: 'USER_EXISTS'
+      });
+    }
 
-  // 验证验证码
-  const storedCodeData = verificationCodes.get(email);
-  
-  if (!storedCodeData) {
-    return res.status(400).json({ 
-      success: false,
-      error: '验证码已过期或不存在，请重新获取',
-      code: 'VCODE_EXPIRED'
-    });
-  }
+    // 验证验证码
+    const storedCodeData = verificationCodes.get(email);
+    
+    if (!storedCodeData) {
+      return res.status(400).json({ 
+        success: false,
+        error: '验证码已过期或不存在，请重新获取',
+        code: 'VCODE_EXPIRED'
+      });
+    }
 
-  // 检查验证码是否过期（5分钟）
-  const now = Date.now();
-  if (now - storedCodeData.timestamp > 5 * 60 * 1000) {
-    verificationCodes.delete(email);
-    return res.status(400).json({ 
-      success: false,
-      error: '验证码已过期，请重新获取',
-      code: 'VCODE_EXPIRED'
-    });
-  }
+    // 检查验证码是否过期（5分钟）
+    const now = Date.now();
+    if (now - storedCodeData.timestamp > 5 * 60 * 1000) {
+      verificationCodes.delete(email);
+      return res.status(400).json({ 
+        success: false,
+        error: '验证码已过期，请重新获取',
+        code: 'VCODE_EXPIRED'
+      });
+    }
 
-  // 验证验证码
-  if (storedCodeData.code !== verificationCode) {
-    return res.status(400).json({ 
-      success: false,
-      error: '验证码错误',
-      code: 'VCODE_ERROR'
-    });
-  }
+    // 验证验证码
+    if (storedCodeData.code !== verificationCode) {
+      return res.status(400).json({ 
+        success: false,
+        error: '验证码错误',
+        code: 'VCODE_ERROR'
+      });
+    }
 
-  // 验证码正确，创建新用户
-  let success = false;
-  if (db) {
-    // 数据库模式
-    success = dbOperations.createUser(email, name, password);
-  } else {
-    // 内存模式
-    const newUser = {
-      email,
-      username: name,
-      password
-    };
-    users.push(newUser);
-    success = true;
-  }
-  
-  if (!success) {
-    return res.status(500).json({ 
-      success: false,
-      error: '注册失败，请稍后重试'
+    // 验证码正确，创建新用户
+    createUser(email, name, password, function(err) {
+      if (err) {
+        console.error('创建用户失败:', err);
+        return res.status(500).json({ 
+          success: false,
+          error: '注册失败，请重试' 
+        });
+      }
+      
+      // 删除已使用的验证码
+      verificationCodes.delete(email);
+      
+      console.log('用户注册成功:', { email, name });
+      res.json({ 
+        success: true,
+        user: { 
+          email, 
+          name: name,
+          username: name 
+        },
+        message: '注册成功'
+      });
     });
-  }
-  
-  // 删除已使用的验证码
-  verificationCodes.delete(email);
-  
-  res.json({ 
-    success: true,
-    user: { 
-      email, 
-      name: name,
-      username: name 
-    },
-    message: '注册成功'
   });
 });
 
 // 获取用户信息
 app.get('/api/v1/users/profile', (req, res) => {
-  // 简单从token解析用户ID
+  // 简单从token解析用户邮箱
   const token = req.headers.authorization?.replace('Bearer ', '');
-  const userId = token ? parseInt(token.split('-').pop()) : null;
+  const userEmail = req.headers['user-email']; // 从header获取用户邮箱
   
-  const user = users.find(u => u.id === userId);
-  if (user) {
-    res.json({ user: { id: user.id, email: user.email, username: user.username } });
-  } else {
-    res.status(401).json({ error: '未授权' });
+  if (!userEmail) {
+    return res.status(401).json({ error: '未授权' });
   }
+  
+  getUserFromDb(userEmail, (err, user) => {
+    if (err) {
+      console.error('数据库查询错误:', err);
+      return res.status(500).json({ error: '服务器内部错误' });
+    }
+    
+    if (user) {
+      res.json({ 
+        user: { 
+          email: user.email, 
+          username: user.username,
+          name: user.username
+        } 
+      });
+    } else {
+      res.status(401).json({ error: '用户不存在' });
+    }
+  });
 });
 
 // 获取所有用户列表
 app.get('/api/v1/users', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const userId = token ? parseInt(token.split('-').pop()) : null;
+  const userEmail = req.headers['user-email']; // 从header获取用户邮箱
   
-  // 返回除自己外的所有用户
-  const userList = users
-    .filter(u => u.id !== userId)
-    .map(u => ({
-      id: u.id,
-      username: u.username,
+  if (!userEmail) {
+    return res.status(401).json({ error: '未授权' });
+  }
+  
+  // 从数据库获取所有用户，除了当前用户
+  db.all('SELECT email, username FROM UserTable WHERE email != ?', [userEmail], (err, users) => {
+    if (err) {
+      console.error('数据库查询错误:', err);
+      return res.status(500).json({ error: '服务器内部错误' });
+    }
+    
+    const userList = users.map(u => ({
       email: u.email,
-      status: onlineUsers.has(u.id) ? 'online' : 'offline'
+      username: u.username,
+      name: u.username,
+      status: onlineUsers.has(u.email) ? 'online' : 'offline'
     }));
-  
-  res.json({ users: userList });
+    
+    res.json({ users: userList });
+  });
 });
 
 // 搜索用户
 app.get('/api/v1/users/search', (req, res) => {
   const { q } = req.query;
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const userId = token ? parseInt(token.split('-').pop()) : null;
+  const userEmail = req.headers['user-email'];
+  
+  if (!userEmail) {
+    return res.status(401).json({ error: '未授权' });
+  }
   
   if (!q) {
     return res.json({ users: [] });
   }
   
-  const searchResults = users
-    .filter(u => u.id !== userId && 
-      (u.username.toLowerCase().includes(q.toLowerCase()) || 
-       u.email.toLowerCase().includes(q.toLowerCase())))
-    .map(u => ({
-      id: u.id,
-      username: u.username,
-      email: u.email,
-      status: onlineUsers.has(u.id) ? 'online' : 'offline'
-    }));
-  
-  res.json({ users: searchResults });
+  // 在数据库中搜索用户
+  const searchQuery = `%${q.toLowerCase()}%`;
+  db.all(
+    `SELECT email, username FROM UserTable 
+     WHERE email != ? AND (LOWER(username) LIKE ? OR LOWER(email) LIKE ?)`,
+    [userEmail, searchQuery, searchQuery],
+    (err, users) => {
+      if (err) {
+        console.error('数据库查询错误:', err);
+        return res.status(500).json({ error: '服务器内部错误' });
+      }
+      
+      const searchResults = users.map(u => ({
+        email: u.email,
+        username: u.username,
+        name: u.username,
+        status: onlineUsers.has(u.email) ? 'online' : 'offline'
+      }));
+      
+      res.json({ users: searchResults });
+    }
+  );
 });
 
 // ====================== 聊天API ======================
@@ -662,252 +586,14 @@ server.listen(PORT, () => {
   console.log('   python send_email.py <email> <code>  # 手动发送测试');
 });
 
-// ====================== 好友管理API ======================
-// 获取好友列表
-app.get('/api/v1/friends', (req, res) => {
-  const userEmail = req.headers['user-email']; // 从请求头获取用户邮箱
-  
-  if (!userEmail) {
-    return res.status(401).json({ 
-      success: false,
-      error: '未授权访问' 
-    });
-  }
-  
-  let friends = [];
-  if (db) {
-    friends = dbOperations.getFriends(userEmail);
-  } else {
-    // 内存模式下的简单实现
-    friends = users.filter(u => u.email !== userEmail);
-  }
-  
-  res.json({ 
-    success: true,
-    friends: friends
+// 优雅关闭
+process.on('SIGINT', () => {
+  console.log('\n👋 服务器关闭中...');
+  server.close(() => {
+    console.log('✅ 服务器已关闭');
+    process.exit(0);
   });
 });
-
-// 发送好友请求
-app.post('/api/v1/friends/request', (req, res) => {
-  const { friendEmail } = req.body;
-  const userEmail = req.headers['user-email'];
-  
-  if (!userEmail || !friendEmail) {
-    return res.status(400).json({ 
-      success: false,
-      error: '参数不完整' 
-    });
-  }
-  
-  if (userEmail === friendEmail) {
-    return res.status(400).json({ 
-      success: false,
-      error: '不能添加自己为好友' 
-    });
-  }
-  
-  // 检查目标用户是否存在
-  let targetUser = null;
-  if (db) {
-    targetUser = dbOperations.findUser(friendEmail);
-  } else {
-    targetUser = users.find(u => u.email === friendEmail);
-  }
-  
-  if (!targetUser) {
-    return res.status(404).json({ 
-      success: false,
-      error: '用户不存在' 
-    });
-  }
-  
-  // 创建好友请求
-  let success = false;
-  if (db) {
-    success = dbOperations.createFriendRequest(userEmail, friendEmail);
-  } else {
-    // 内存模式下直接添加为好友
-    success = true;
-  }
-  
-  if (success) {
-    res.json({ 
-      success: true,
-      message: '好友请求已发送' 
-    });
-  } else {
-    res.status(500).json({ 
-      success: false,
-      error: '发送好友请求失败' 
-    });
-  }
-});
-
-// 获取好友请求
-app.get('/api/v1/friends/requests', (req, res) => {
-  const userEmail = req.headers['user-email'];
-  
-  if (!userEmail) {
-    return res.status(401).json({ 
-      success: false,
-      error: '未授权访问' 
-    });
-  }
-  
-  let requests = [];
-  if (db) {
-    requests = dbOperations.getFriendRequests(userEmail);
-  }
-  
-  res.json({ 
-    success: true,
-    requests: requests
-  });
-});
-
-// 接受好友请求
-app.post('/api/v1/friends/accept', (req, res) => {
-  const { friendEmail } = req.body;
-  const userEmail = req.headers['user-email'];
-  
-  if (!userEmail || !friendEmail) {
-    return res.status(400).json({ 
-      success: false,
-      error: '参数不完整' 
-    });
-  }
-  
-  let success = false;
-  if (db) {
-    // 添加好友关系
-    success = dbOperations.addFriend(userEmail, friendEmail);
-    if (success) {
-      // 删除好友请求
-      dbOperations.deleteFriendRequest(friendEmail, userEmail);
-    }
-  } else {
-    success = true;
-  }
-  
-  if (success) {
-    res.json({ 
-      success: true,
-      message: '已接受好友请求' 
-    });
-  } else {
-    res.status(500).json({ 
-      success: false,
-      error: '接受好友请求失败' 
-    });
-  }
-});
-
-// 拒绝好友请求
-app.post('/api/v1/friends/reject', (req, res) => {
-  const { friendEmail } = req.body;
-  const userEmail = req.headers['user-email'];
-  
-  if (!userEmail || !friendEmail) {
-    return res.status(400).json({ 
-      success: false,
-      error: '参数不完整' 
-    });
-  }
-  
-  let success = false;
-  if (db) {
-    success = dbOperations.deleteFriendRequest(friendEmail, userEmail);
-  } else {
-    success = true;
-  }
-  
-  if (success) {
-    res.json({ 
-      success: true,
-      message: '已拒绝好友请求' 
-    });
-  } else {
-    res.status(500).json({ 
-      success: false,
-      error: '拒绝好友请求失败' 
-    });
-  }
-});
-
-// ====================== 消息API ======================
-// 获取聊天记录
-app.get('/api/v1/messages/:friendEmail', (req, res) => {
-  const { friendEmail } = req.params;
-  const userEmail = req.headers['user-email'];
-  
-  if (!userEmail) {
-    return res.status(401).json({ 
-      success: false,
-      error: '未授权访问' 
-    });
-  }
-  
-  let messages = [];
-  if (db) {
-    messages = dbOperations.getMessages(userEmail, friendEmail);
-  }
-  
-  res.json({ 
-    success: true,
-    messages: messages
-  });
-});
-
-// 发送消息
-app.post('/api/v1/messages', (req, res) => {
-  const { receiverEmail, content } = req.body;
-  const senderEmail = req.headers['user-email'];
-  
-  if (!senderEmail || !receiverEmail || !content) {
-    return res.status(400).json({ 
-      success: false,
-      error: '参数不完整' 
-    });
-  }
-  
-  let success = false;
-  if (db) {
-    success = dbOperations.saveMessage(senderEmail, receiverEmail, content);
-  } else {
-    // 内存模式
-    messages.push({
-      sender: senderEmail,
-      receiver: receiverEmail,
-      content: content,
-      timestamp: Date.now() / 1000
-    });
-    success = true;
-  }
-  
-  if (success) {
-    res.json({ 
-      success: true,
-      message: '消息发送成功' 
-    });
-    
-    // 通过Socket.IO广播消息给在线用户
-    io.emit('new_message', {
-      sender: senderEmail,
-      receiver: receiverEmail,
-      content: content,
-      timestamp: Date.now()
-    });
-  } else {
-    res.status(500).json({ 
-      success: false,
-      error: '消息发送失败' 
-    });
-  }
-});
-
-// 内存存储验证码（生产环境应使用Redis等）
-let verificationCodes = new Map();
 
 // 发送验证码接口
 app.post('/api/v1/auth/send-code', async (req, res) => {
@@ -1070,48 +756,37 @@ app.post('/api/v1/auth/login-with-code', (req, res) => {
     });
   }
 
-  // 验证码正确，查找用户
-  let user = null;
-  if (db) {
-    // 数据库模式
-    user = dbOperations.findUser(email);
-  } else {
-    // 内存模式
-    user = users.find(u => u.email === email);
-  }
-  
-  if (!user) {
-    verificationCodes.delete(email);
-    return res.status(400).json({ 
-      success: false,
-      error: '用户不存在，请先注册' 
-    });
-  }
-
-  // 登录成功
-  verificationCodes.delete(email);
-  onlineUsers.add(user.email);
-  
-  res.json({ 
-    success: true,
-    token: `fake-token-${user.email}`, 
-    user: { 
-      email: user.email, 
-      name: user.username,
-      username: user.username 
+  // 验证码正确，从数据库查找用户
+  getUserFromDb(email, (err, user) => {
+    if (err) {
+      console.error('数据库查询错误:', err);
+      verificationCodes.delete(email);
+      return res.status(500).json({ 
+        success: false,
+        error: '服务器内部错误' 
+      });
     }
-  });
-});
+    
+    if (!user) {
+      verificationCodes.delete(email);
+      return res.status(400).json({ 
+        success: false,
+        error: '用户不存在，请先注册' 
+      });
+    }
 
-// 优雅关闭
-process.on('SIGINT', () => {
-  console.log('\n👋 服务器关闭中...');
-  if (db) {
-    db.close();
-    console.log('📁 数据库连接已关闭');
-  }
-  server.close(() => {
-    console.log('✅ 服务器已关闭');
-    process.exit(0);
+    // 登录成功
+    verificationCodes.delete(email);
+    onlineUsers.add(user.email);
+    
+    res.json({ 
+      success: true,
+      token: `fake-token-${Date.now()}`, 
+      user: { 
+        email: user.email, 
+        name: user.username,
+        username: user.username 
+      }
+    });
   });
 });

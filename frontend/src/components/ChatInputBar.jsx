@@ -41,8 +41,9 @@ const ChatInputBar = ({ onSendMessage, onVideoCall, onSendImage, onSendVoice }) 
     display: 'flex',
     alignItems: 'flex-end',
     padding: '12px 16px',
-    backgroundColor: '#ffffff',
-    borderTop: '1px solid #f8bbd9',
+    borderRadius: '8px',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    border: '1px solid #f8bbd9',
     gap: '12px',
   };
 

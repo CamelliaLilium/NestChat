@@ -93,8 +93,8 @@ const PhotoSelect = ({ isVisible, onClose, currentAvatar, onAvatarChange }) => {
 
   const checkmarkStyle = {
     position: 'absolute',
-    top: '-5px',
-    right: '-5px',
+    top: '5px',
+    right: '5px',
     width: '24px',
     height: '24px',
     backgroundColor: '#4caf50',
