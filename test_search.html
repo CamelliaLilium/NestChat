@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>搜索功能测试</title>
+</head>
+<body>
+    <h2>测试搜索功能</h2>
+    <div>
+        <label>用户邮箱: </label>
+        <input type="email" id="userEmail" value="bob@test.com" />
+    </div>
+    <div>
+        <label>搜索关键词: </label>
+        <input type="text" id="searchQuery" value="alice" />
+        <button onclick="testSearch()">搜索</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+        async function testSearch() {
+            const userEmail = document.getElementById('userEmail').value;
+            const query = document.getElementById('searchQuery').value;
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                const response = await fetch(`http://localhost:3001/api/v1/users/search?q=${encodeURIComponent(query)}`, {
+                    headers: {
+                        'user-email': userEmail,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">错误: ${response.status} - ${response.statusText}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">请求失败: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
