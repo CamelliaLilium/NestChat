@@ -65,7 +65,7 @@ const FriendItem = ({ friend, isSelected, onSelect }) => {
     >
       <div style={avatarStyle}>
         <img
-          src={`/picture/${friend.avatar}`}
+          src={`/picture/${friend.avatar || '1.png'}`}
           alt={friend.name}
           style={avatarImageStyle}
         />

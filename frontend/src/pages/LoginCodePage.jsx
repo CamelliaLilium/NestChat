@@ -1,11 +1,24 @@
 import React, { useState } from 'react';
 import api from '../../utils/api'; 
 
-const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLoginSuccess }) => {
+const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLoginSuccess, logoutMessage, onClearLogoutMessage }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
+
+  // 监听 logoutMessage，显示弹窗并定时消失
+  React.useEffect(() => {
+    if (logoutMessage) {
+      setAlertMessage(logoutMessage);
+      setShowAlert(true);
+      const timer = setTimeout(() => {
+        setShowAlert(false);
+        onClearLogoutMessage && onClearLogoutMessage();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [logoutMessage, onClearLogoutMessage]);
 
   const handleLogin = async () => {
     // 检查输入是否为空
@@ -30,11 +43,17 @@ const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLo
       if (response.success === true || (response.token && response.user)) {
         api.setToken(response.token); // 保存token
         showAlertMessage('登录成功！');
+        let avatar = localStorage.getItem('userAvatar');
+        if (!avatar) {
+          avatar = '1.png'; // 只存文件名，不带路径
+          localStorage.setItem('userAvatar', avatar);
+        }
         setTimeout(() => {
           onLoginSuccess({ 
             email: response.user.email, 
             name: response.user.name || response.user.username, // 兼容两种字段名
-            token: response.token
+            token: response.token,
+            avatar: avatar
           });
         }, 1000);
       } else {

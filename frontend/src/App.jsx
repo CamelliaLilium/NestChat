@@ -138,18 +138,28 @@ function App() {
     setCurrentPage('chat'); // 选中好友后跳转到聊天页面
   };
 
-  // 统一的退出登录逻辑
+  // 统一的退出登录逻辑，支持提示（优化：将提示交由登录页管理）
+  const [logoutMessage, setLogoutMessage] = useState('');
   const handleLogout = async () => {
-    await apiClient.logout();
+    try {
+      await apiClient.logout();
+    } catch (e) {
+      console.error('logout error:', e);
+    }
     setIsLoggedIn(false);
     setCurrentUser(null);
     localStorage.removeItem('currentUser');
     localStorage.setItem('isLoggedIn', 'false');
     setCurrentPage('login');
+    setLogoutMessage('已退出登录');
   };
+
+  // 提供给登录页的清除退出提示回调
+  const handleClearLogoutMessage = () => setLogoutMessage('');
 
   return (
     <div>
+      {/* 退出登录弹窗交由登录页管理，这里不再渲染 */}
       {!isLoggedIn ? (
         // 如果用户未登录，则渲染登录/注册相关的页面
         <>
@@ -158,6 +168,8 @@ function App() {
               onLoginSuccess={handleLoginSuccess}
               onNavigateToSignUp={navigateToSignUp}
               onNavigateToVerificationLogin={navigateToLoginVcode}
+              logoutMessage={logoutMessage}
+              onClearLogoutMessage={handleClearLogoutMessage}
             />
           )}
           {currentPage === 'signup' && (
@@ -170,6 +182,8 @@ function App() {
             <LoginVcodePage
               onLoginSuccess={handleLoginSuccess}
               onNavigateToLogin={navigateToLogin}
+              logoutMessage={logoutMessage}
+              onClearLogoutMessage={handleClearLogoutMessage}
             />
           )}
         </>

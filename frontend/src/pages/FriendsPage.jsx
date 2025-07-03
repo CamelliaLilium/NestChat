@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react'; // <-- 确保这里有 useCallback
 import api from '../../utils/api.js'; // 确保api路径正确
 import NavButton from '../components/NavButton.jsx';
 import FriendsList from '../components/FriendsList.jsx';
@@ -19,18 +19,28 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
   const [showChangeSign, setShowChangeSign] = useState(false);
   const [currentSignature, setCurrentSignature] = useState(currentUser?.signature || "这是我的个性签名");
 
-  const createSelfUser = (avatarOverride) => {
+  // 获取本地头像（优先 localStorage，其次 currentUser，其次默认）
+  // 这里的 currentUser 总是组件当前接收到的 prop
+  const getLocalAvatar = useCallback((avatarOverride, user) => {
+    if (avatarOverride) return avatarOverride;
+    const localAvatar = localStorage.getItem('userAvatar');
+    if (localAvatar) return localAvatar;
+    if (user?.avatar && user.avatar !== '') return user.avatar;
+    return '1.png'; // 只返回文件名
+  }, []); // getLocalAvatar 自身不依赖外部变化，因此依赖数组为空
+
+  const createSelfUser = useCallback((avatarOverride) => { // <-- 重新使用 useCallback
     return {
       id: currentUser?.id || 'self',
       name: currentUser?.name || "我",
       account: currentUser?.email || "current_user",
-      avatar: avatarOverride || currentUser?.avatar || "/default_avatar.png", // Use avatarOverride if provided
+      avatar: getLocalAvatar(avatarOverride, currentUser), // 使用 useCallback 后的 getLocalAvatar
       signature: currentSignature,
       isOnline: true,
       isSelf: true,
       isFriend: true
     };
-  };
+  }, [currentUser, currentSignature, getLocalAvatar]); // 依赖 currentUser, currentSignature, getLocalAvatar
 
   // --- 数据初始化和API调用 ---
   useEffect(() => {
@@ -52,7 +62,8 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
           // Find the current user in the newly calculated combinedFriends list
           const updatedSelfUser = combinedFriends.find(f => f.id === (currentUser?.id || 'self'));
           // If previously selected was "self", update to the new "self" object
-          if (prevSelected && (prevSelected.id === (currentUser?.id || 'self') || prevSelected.isSelf)) {
+          // 或者如果之前没有选中任何好友，则默认选中自己
+          if (!prevSelected || (prevSelected.id === (currentUser?.id || 'self') || prevSelected.isSelf)) {
             return updatedSelfUser;
           }
           // Otherwise, maintain the previous selected state
@@ -69,20 +80,19 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     };
 
     fetchInitialData();
-    // Depend on currentUser and currentSignature so that if currentUser (including avatar)
-    // or signature changes from parent, this effect re-runs.
-  }, [currentUser, currentSignature]);
+    // 确保当 currentUser 或 currentSignature 变化时，重新获取数据并更新自身信息
+  }, [currentUser, currentSignature, createSelfUser]); // 添加 createSelfUser 到依赖
 
   // Handle avatar changes
   const handleInternalAvatarChange = async (newAvatarUrl) => {
     try {
-      // Assuming onAvatarChange prop handles the actual API update and updates currentUser in parent
+      // 1. 调用父组件的 onAvatarChange，它应该负责更新后端和父组件的 currentUser
       await onAvatarChange(newAvatarUrl);
 
-      // Create a new selfUser object with the updated avatar
-      const updatedSelfUser = createSelfUser(newAvatarUrl);
+      // 2. 将新头像保存到 localStorage，这是 getLocalAvatar 的首选来源
+      localStorage.setItem('userAvatar', newAvatarUrl);
 
-      // Update the friendsList to reflect the new avatar for the current user
+      // 3. 立即更新 friendsList 中自身头像，无需等待父组件 currentUser 更新
       setFriendsList(prevFriends => prevFriends.map(friend =>
         friend.id === (currentUser?.id || 'self')
           ? { ...friend, avatar: newAvatarUrl }
@@ -104,31 +114,43 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     isOnline: true,
   };
 
-  const handleSearch = (query) => {
+  // 搜索数据库所有用户，区分好友和非好友
+  const handleSearch = async (query) => {
     setSearchQuery(query);
     if (query.trim()) {
-      const results = allUsers.filter(user =>
-        user.name.includes(query) ||
-        user.account.includes(query) ||
-        user.signature.includes(query)
-      );
-
-      setSearchResults(results);
-      setShowSearchResults(true);
-
-      if (results.length === 0) {
-        console.log('该用户不存在');
-      } else if (results.length > 0) {
-        // If there are search results, select the first one.
-        // This is important because selectedFriend is displayed in FriendDetail.
-        setSelectedFriend(results[0]);
+      try {
+        // 调用后端接口搜索
+        const res = await api.searchUsers(query);
+        // 兼容后端返回格式 { users: [...] }
+        const results = (res && res.users) ? res.users : [];
+        // 标记每个结果是否为好友
+        const resultsWithFriendFlag = results.map(user => {
+          // friendsList 里有的就是好友
+          const friend = friendsList.find(f => (f.email === user.email || f.account === user.email));
+          return {
+            ...user,
+            isFriend: !!friend,
+            id: user.email || user.id, // 兼容id
+            name: user.username || user.name,
+            account: user.email,
+            avatar: user.avatar || '/picture/1.png', // <-- 这里改为 /picture/1.png
+            signature: user.signature || '',
+          };
+        });
+        setSearchResults(resultsWithFriendFlag);
+        setShowSearchResults(true);
+        // 默认选中第一个
+        setSelectedFriend(resultsWithFriendFlag[0] || null);
+      } catch (e) {
+        setSearchResults([]);
+        setShowSearchResults(true);
+        setSelectedFriend(null);
+        console.error('搜索失败', e);
       }
     } else {
       setShowSearchResults(false);
       setSearchResults([]);
-      // When search query is cleared, reset selectedFriend to current user if it was a search result.
-      // Or, ideally, revert to the previously selected friend before search, or default to self.
-      setSelectedFriend(friendsList.find(f => f.isSelf)); // Default to selecting self when search is cleared
+      setSelectedFriend(friendsList.find(f => f.isSelf));
     }
   };
 
@@ -164,7 +186,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
       console.error("刷新数据失败:", error);
     }
   };
-
+// 处理发送消息
   const handleSendMessage = (friend) => {
     if (!friend) return;
     setActiveChat(friend);
@@ -175,7 +197,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
   const handleVideoCall = () => {
     console.log('发起视频通话');
   };
-
+// 处理添加好友
   const handleAddFriend = async (friend) => {
     if (!friend) return;
     // Check if a request has already been sent to this friend
@@ -197,7 +219,7 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
       console.error('发送好友申请失败:', e.message || e);
     }
   };
-
+// 处理接受和拒绝好友请求
   const handleAcceptRequest = async (request) => {
     try {
       if (request.id) {
@@ -322,6 +344,24 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     color: 'rgb(2, 0, 0)',
   };
 
+  // 删除好友后刷新本地好友列表和后端同步
+  const handleFriendDeleted = async (friendId) => {
+    setFriendsList(prev => {
+      const updatedList = prev.filter(f => f.id !== friendId && !f.isSelf);
+      // 如果当前选中的是被删好友，则切换到自己
+      setSelectedFriend(currentSelected => {
+        if (currentSelected && currentSelected.id === friendId) {
+          // 确保从最新的列表中找到“我”
+          return updatedList.find(f => f.isSelf);
+        }
+        return currentSelected;
+      });
+      return updatedList; // 返回更新后的列表
+    });
+    // 可选：刷新后端数据，确保同步
+    await handleRefreshPage();
+  };
+
   return (
     <div style={containerStyle}>
       {/* 顶部栏 */}
@@ -377,8 +417,8 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
           friends={showSearchResults ? searchResults : friendsList}
           selectedFriend={selectedFriend}
           onFriendSelect={handleFriendSelect}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearch}
+          onSearchChange={setSearchQuery}
+          onSearch={handleSearch}
         />
 
         {/* 右侧面板 - 好友详情 */}
@@ -386,10 +426,11 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
           selectedFriend={selectedFriend}
           onSendMessage={() => handleSendMessage(selectedFriend)}
           onVideoCall={handleVideoCall}
-          onAvatarChange={handleInternalAvatarChange} 
+          onAvatarChange={handleInternalAvatarChange}
           friendRequests={friendRequests}
           onAddFriend={handleAddFriend}
           onChangeSignature={handleChangeSignature}
+          onFriendDeleted={handleFriendDeleted}
         />
       </div>
 

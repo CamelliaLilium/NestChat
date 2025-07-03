@@ -221,7 +221,7 @@ class ApiClient {
    * @param {string} friendId - 好友用户ID
    * @returns {Promise<Object>} 添加结果
    */
-  async addFriend(friendId) {
+  async handleaddFriend(friendId) {
     return this.request(`/friends/${friendId}`, {
       method: 'POST',
     });
@@ -232,7 +232,7 @@ class ApiClient {
    * @param {string} friendId - 好友用户ID
    * @returns {Promise<Object>} 删除结果
    */
-  async removeFriend(friendId) {
+  async handleremoveFriend(friendId) {
     return this.request(`/friends/${friendId}`, {
       method: 'DELETE',
     });

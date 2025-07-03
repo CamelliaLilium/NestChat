@@ -1,7 +1,7 @@
 import React from 'react';
 import FriendItem from './FriendItem.jsx';
 
-const FriendsList = ({ friends, selectedFriend, onFriendSelect, searchQuery, onSearchChange }) => {
+const FriendsList = ({ friends, selectedFriend, onFriendSelect, searchQuery, onSearchChange, onSearch }) => {
   const leftPanelStyle = {
     width: '40%',
     backgroundColor: '#ffffff',
@@ -13,19 +13,32 @@ const FriendsList = ({ friends, selectedFriend, onFriendSelect, searchQuery, onS
   const searchBarStyle = {
     padding: '16px',
     borderBottom: '1px solid #f8bbd9',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   };
 
   const searchInputStyle = {
-    width: '80%',
+    flex: 1,
     padding: '12px 16px',
     border: '1px solid #f8bbd9',
     borderRadius: '20px',
     fontSize: '14px',
     outline: 'none',
-    marginLeft: '10%',
-    marginRight: '10%',
     backgroundColor: '#fce4ec',
     transition: 'border-color 0.2s ease',
+  };
+
+  const searchButtonStyle = {
+    padding: '10px 18px',
+    marginLeft: '8px',
+    border: 'none',
+    borderRadius: '20px',
+    backgroundColor: '#e91e63',
+    color: '#fff',
+    fontSize: '14px',
+    cursor: 'pointer',
+    transition: 'background 0.2s',
   };
 
   const friendsListStyle = {
@@ -47,6 +60,12 @@ const FriendsList = ({ friends, selectedFriend, onFriendSelect, searchQuery, onS
           onFocus={(e) => e.target.style.borderColor = '#e91e63'}
           onBlur={(e) => e.target.style.borderColor = '#f8bbd9'}
         />
+        <button
+          style={searchButtonStyle}
+          onClick={() => onSearch && onSearch(searchQuery)}
+        >
+          搜索
+        </button>
       </div>
 
       {/* 好友列表 */}
@@ -63,5 +82,7 @@ const FriendsList = ({ friends, selectedFriend, onFriendSelect, searchQuery, onS
     </div>
   );
 };
+
+localStorage.setItem('userAvatar', '1.png');
 
 export default FriendsList;

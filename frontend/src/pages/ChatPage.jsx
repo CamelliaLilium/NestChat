@@ -6,7 +6,8 @@ import ChatListPage from '../components/ChatListPage.jsx';
 import VideoCallModal from '../components/VideoCallModal.jsx';
 import VoiceChatModal from '../components/VoiceChat.jsx';
 
-const ChatPage = ({ onNavigateToFriends, currentUser }) => {
+// 建议：增加 onLogout 参数，便于页面跳转退出
+const ChatPage = ({ onNavigateToFriends, currentUser, onLogout }) => {
   // 当前聊天对象ID（好友ID）
   const [currentChatId, setCurrentChatId] = useState(1);
   // 消息列表
@@ -311,7 +312,7 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
               💬
             </NavButton>
             <NavButton
-              onClick={onLayout}
+              onClick={typeof onLogout === 'function' ? onLogout : () => {}}
               title="退出登录"
             >
               🚪
@@ -329,7 +330,7 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
                 audioUrl={message.type === 'audio' ? message.content : null}
                 isOwn={message.isOwn}
                 timestamp={message.timestamp}
-                avatar={message.avatar}
+                avatar={message.avatar || '1.png'}
                 type={message.type}
               />
             ))}

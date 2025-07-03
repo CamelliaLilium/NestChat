@@ -17,7 +17,7 @@ from email.mime.image import MIMEImage
 import os
 
 def send_verification_email(email: str, vericode: str) -> bool:
-    """发送验证码邮件（纯渐变背景）"""
+    """发送验证码邮件（纯渐变背景，无logo.png）"""
 
     mail_html = f"""\
 <html>

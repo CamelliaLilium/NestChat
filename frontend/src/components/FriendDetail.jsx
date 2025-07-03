@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import PhotoSelect from './PhotoSelect.jsx';
 import DeleteFriendConfirm from './DeleteFriendConfirm.jsx';
+import api from '../../utils/api.js';
 
-const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend, onChangeSignature }) => {
+const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend, onChangeSignature, onFriendDeleted }) => {
   const [showPhotoSelect, setShowPhotoSelect] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   const rightPanelStyle = {
     width: '60%',
@@ -136,10 +139,24 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
     setShowDeleteConfirm(true);
   };
 
-  const handleConfirmDelete = () => {
-    // TODO: 实现删除好友功能
-    console.log(`删除好友: ${selectedFriend.name}`);
-    alert(`已删除好友 ${selectedFriend.name}`);
+  const handleConfirmDelete = async () => {
+    if (!selectedFriend) return;
+    setDeleteLoading(true);
+    try {
+      await api.handleremoveFriend(selectedFriend.id);
+      setDeleteSuccess(true);
+      if (onFriendDeleted) {
+        onFriendDeleted(selectedFriend.id);
+      }
+      setTimeout(() => {
+        setDeleteSuccess(false);
+      }, 1500);
+    } catch (e) {
+      alert('删除好友失败: ' + (e.message || e));
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   // 判断是否是好友
@@ -265,6 +282,24 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
         onConfirm={handleConfirmDelete}
         friendName={selectedFriend.name}
       />
+      {/* 删除成功提示 */}
+      {deleteSuccess && (
+        <div style={{
+          position: 'fixed',
+          top: '20%',
+          left: '50%',
+          transform: 'translate(-50%, 0)',
+          background: '#4caf50',
+          color: '#fff',
+          padding: '16px 32px',
+          borderRadius: '12px',
+          zIndex: 2000,
+          fontSize: '18px',
+          fontWeight: 600
+        }}>
+          删除好友成功
+        </div>
+      )}
     </div>
   );
 };
