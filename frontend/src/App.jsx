@@ -4,8 +4,7 @@ import FriendsPage from './pages/FriendsPage.jsx';
 import SignUpPage from './pages/SignUpPage.jsx';
 import LoginCodePage from './pages/LoginCodePage.jsx';
 import LoginVcodePage from './pages/LoginVcodePage.jsx';
-// import websocketClient from './utils/websocket.js';
-// import apiClient from './utils/api.js';
+import apiClient from '../utils/api.js';
 
 // App主组件，负责全局状态管理和页面路由
 function App() {
@@ -71,12 +70,25 @@ function App() {
     avatar: '👨‍💼', // 默认头像
   });
 
+  // 初始化API客户端，在页面刷新时恢复用户邮箱
+  React.useEffect(() => {
+    if (isLoggedIn && currentUser?.email) {
+      apiClient.setUserEmail(currentUser.email);
+    }
+  }, [isLoggedIn, currentUser?.email]);
+
   // handleLoginSuccess 函数：处理用户成功登录后的逻辑
   const handleLoginSuccess = (user) => {
     setCurrentUser(user); // 更新当前用户信息
     setIsLoggedIn(true); // 设置登录状态为 true
     localStorage.setItem('currentUser', JSON.stringify(user)); // 将用户信息存储到 localStorage
     localStorage.setItem('isLoggedIn', 'true'); // 将登录状态存储到 localStorage
+    
+    // 设置API客户端的用户邮箱
+    if (user.email) {
+      apiClient.setUserEmail(user.email);
+    }
+    
     setCurrentPage('chat'); // 登录成功后跳转到聊天页面
   };
 
@@ -93,7 +105,7 @@ function App() {
     localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // 更新 localStorage 中的用户信息
     // 刷新页面以同步所有头像显示，这是根据用户需求进行的，
     // 在React中更推荐通过状态管理和组件重渲染来同步
-    window.location.reload();
+    // window.location.reload();
   };
 
   // navigateToChat 函数：导航到聊天页面
@@ -139,28 +151,70 @@ function App() {
     setCurrentPage('chat'); // 选中好友后跳转到聊天页面
   };
 
+<<<<<<< HEAD
+   // 统一的退出登录逻辑，支持提示（优化：将提示交由登录页管理）
+  const [logoutMessage, setLogoutMessage] = useState('');
+  const handleLogout = async () => {
+    try {
+      await apiClient.logout();
+    } catch (e) {
+      console.error('logout error:', e);
+    }
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    localStorage.removeItem('currentUser');
+    localStorage.setItem('isLoggedIn', 'false');
+    setCurrentPage('login');
+    setLogoutMessage('已退出登录');
+  };
+=======
+  // 统一的退出登录逻辑，支持提示（优化：将提示交由登录页管理）
+  const [logoutMessage, setLogoutMessage] = useState('');
+  const handleLogout = async () => {
+    try {
+      await apiClient.logout();
+    } catch (e) {
+      console.error('logout error:', e);
+    }
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    localStorage.removeItem('currentUser');
+    localStorage.setItem('isLoggedIn', 'false');
+    setCurrentPage('login');
+    setLogoutMessage('已退出登录');
+  };
+>>>>>>> 3162be600e5bfc6a4e70ac93eb12ddcf07eb1659
+
+  // 提供给登录页的清除退出提示回调
+  const handleClearLogoutMessage = () => setLogoutMessage('');
+
   return (
     <div>
+      {/* 退出登录弹窗交由登录页管理，这里不再渲染 */}
       {!isLoggedIn ? (
         // 如果用户未登录，则渲染登录/注册相关的页面
         <>
           {currentPage === 'login' && (
             <LoginCodePage
-              onLoginSuccess={handleLoginSuccess} // 传递登录成功回调
-              onNavigateToSignUp={navigateToSignUp} // 传递导航到注册页面的回调
-              onNavigateToVerificationLogin={navigateToLoginVcode} // 传递导航到验证码登录页面的回调
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToSignUp={navigateToSignUp}
+              onNavigateToVerificationLogin={navigateToLoginVcode}
+              logoutMessage={logoutMessage}
+              onClearLogoutMessage={handleClearLogoutMessage}
             />
           )}
           {currentPage === 'signup' && (
             <SignUpPage
-              onSignUpSuccess={handleSignUpSuccess} // 传递注册成功回调
-              onNavigateToLogin={navigateToLogin} // 传递导航到登录页面的回调
+              onSignUpSuccess={handleSignUpSuccess}
+              onNavigateToLogin={navigateToLogin}
             />
           )}
           {currentPage === 'loginVcode' && (
             <LoginVcodePage
-              onLoginSuccess={handleLoginSuccess} // 传递登录成功回调
-              onNavigateToLogin={navigateToLogin} // 传递导航到密码登录页面的回调
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToLogin={navigateToLogin}
+              logoutMessage={logoutMessage}
+              onClearLogoutMessage={handleClearLogoutMessage}
             />
           )}
         </>
@@ -169,17 +223,19 @@ function App() {
         <>
           {currentPage === 'chat' && (
             <ChatPage
-              onNavigateToFriends={navigateToFriends} // 传递导航到好友列表页面的回调
-              selectedContact={selectedContact} // 传递当前选中的联系人信息
-              currentUser={currentUser} // 传递当前用户信息
+              onNavigateToFriends={navigateToFriends}
+              selectedContact={selectedContact}
+              currentUser={currentUser}
+              onLogout={handleLogout}
             />
           )}
           {currentPage === 'friends' && (
             <FriendsPage
-              onNavigateToChat={navigateToChat} // 传递导航到聊天页面的回调
-              onSelectFriend={handleSelectFriend} // 传递选择好友的回调
-              currentUser={currentUser} // 传递当前用户信息
-              onAvatarChange={handleAvatarChange} // 传递头像变更回调
+              onNavigateToChat={navigateToChat}
+              onSelectFriend={handleSelectFriend}
+              currentUser={currentUser}
+              onAvatarChange={handleAvatarChange}
+              onLogout={handleLogout}
             />
           )}
         </>

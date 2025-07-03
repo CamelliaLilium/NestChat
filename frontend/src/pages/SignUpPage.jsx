@@ -100,6 +100,14 @@ const SignUpPage = ({ onNavigateToLogin, onRegisterSuccess }) => {
       );
       if (response.success) {
         showAlertMessage('注册成功！即将跳转到登录页面');
+<<<<<<< HEAD
+=======
+        // 注册成功后，前端本地保存默认头像（只存文件名，不带路径）
+>>>>>>> 3162be600e5bfc6a4e70ac93eb12ddcf07eb1659
+        localStorage.setItem('userAvatar', '1.png');
+        if (onRegisterSuccess) {
+          onRegisterSuccess('1.png');
+        }
         setTimeout(() => { 
           onNavigateToLogin();
         }, 1000); 

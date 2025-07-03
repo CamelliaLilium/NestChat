@@ -27,6 +27,7 @@ const FriendItem = ({ friend, isSelected, onSelect }) => {
     flexShrink: 0,
     overflow: 'hidden',
     border: friend.isSelf ? '2px solid #e91e63' : '2px solid #f8bbd9',
+    background: '#f8bbd9',
   };
 
   const avatarImageStyle = {
@@ -65,14 +66,18 @@ const FriendItem = ({ friend, isSelected, onSelect }) => {
     >
       <div style={avatarStyle}>
         <img
-          src={`/picture/${friend.avatar}`}
+          src={`/picture/${friend.avatar || '1.png'}`}
           alt={friend.name}
           style={avatarImageStyle}
+          onError={e => { e.target.onerror = null; e.target.src = '/picture/1.png'; }}
         />
       </div>
       <div style={friendInfoStyle}>
         <div style={friendNameStyle}>{friend.name}</div>
         <div style={friendAccountStyle}>@{friend.account}</div>
+        {friend.email && friend.email !== friend.account && (
+          <div style={friendAccountStyle}>{friend.email}</div>
+        )}
       </div>
     </div>
   );

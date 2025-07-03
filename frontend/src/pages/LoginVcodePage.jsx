@@ -1,11 +1,24 @@
 import React, { useState } from 'react';
 import api from '../../utils/api'; 
 
-const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
+const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess, logoutMessage, onClearLogoutMessage }) => {
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
+
+  // 监听 logoutMessage，显示弹窗并定时消失
+  React.useEffect(() => {
+    if (logoutMessage) {
+      setAlertMessage(logoutMessage);
+      setShowAlert(true);
+      const timer = setTimeout(() => {
+        setShowAlert(false);
+        onClearLogoutMessage && onClearLogoutMessage();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [logoutMessage, onClearLogoutMessage]);
   const [codeSent, setCodeSent] = useState(false);
 
 
@@ -47,12 +60,19 @@ const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
 
     if (response.success) {
       api.setToken(response.token);
+      api.setUserEmail(response.user.email); // 保存用户邮箱到API客户端
       showAlertMessage('登录成功！');
+      let avatar = localStorage.getItem('userAvatar');
+      if (!avatar) {
+        avatar = '1.png'; // 只存文件名，不带路径
+        localStorage.setItem('userAvatar', avatar);
+      }
       setTimeout(() => {
         onLoginSuccess({
           email: response.user.email,
           name: response.user.name,
-          token: response.token
+          token: response.token,
+          avatar: avatar
         });
       }, 1000);
     } else if (response.error === 'USER_NOT_FOUND') {
@@ -194,6 +214,12 @@ const LoginVcodePage = ({ onNavigateToLogin, onLoginSuccess }) => {
     border: '1px solid #f8bbd9',
     zIndex: 1000,
     animation: showAlert ? 'slideDown 0.3s ease' : 'slideUp 0.3s ease',
+  };
+
+  const showAlertMessage = (message) => {
+    setAlertMessage(message);
+    setShowAlert(true);
+    setTimeout(() => setShowAlert(false), 3000);
   };
 
   const Button = ({ style, onClick, children, type = 'button', disabled = false }) => {

@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import PhotoSelect from './PhotoSelect.jsx';
 import DeleteFriendConfirm from './DeleteFriendConfirm.jsx';
+import api from '../../utils/api.js';
 
-const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend }) => {
+const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend, onChangeSignature, onFriendDeleted }) => {
   const [showPhotoSelect, setShowPhotoSelect] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   const rightPanelStyle = {
     width: '60%',
@@ -112,6 +115,8 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
     cursor: 'not-allowed'
   };
 
+
+
   const handleAvatarClick = () => {
     if (selectedFriend?.isSelf) {
       setShowPhotoSelect(true);
@@ -134,10 +139,24 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
     setShowDeleteConfirm(true);
   };
 
-  const handleConfirmDelete = () => {
-    // TODO: 实现删除好友功能
-    console.log(`删除好友: ${selectedFriend.name}`);
-    alert(`已删除好友 ${selectedFriend.name}`);
+  const handleConfirmDelete = async () => {
+    if (!selectedFriend) return;
+    setDeleteLoading(true);
+    try {
+      await api.handleremoveFriend(selectedFriend.id);
+      setDeleteSuccess(true);
+      if (onFriendDeleted) {
+        onFriendDeleted(selectedFriend.id);
+      }
+      setTimeout(() => {
+        setDeleteSuccess(false);
+      }, 1500);
+    } catch (e) {
+      alert('删除好友失败: ' + (e.message || e));
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   // 判断是否是好友
@@ -170,9 +189,10 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
           title={selectedFriend.isSelf ? "点击更换头像" : ""}
         >
           <img
-            src={`/picture/${selectedFriend.avatar}`}
+            src={`/picture/${selectedFriend.avatar || '1.png'}`}
             alt={selectedFriend.name}
             style={avatarImageStyle}
+            onError={e => { e.target.onerror = null; e.target.src = '/picture/1.png'; }}
           />
         </div>
 
@@ -196,6 +216,36 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
             </span>
           </div>
         </div>
+
+        {/* 只有在查看自己信息时才显示更改个性签名按钮 */}
+        {selectedFriend.isSelf && (
+          <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+            <button
+              style={{
+                padding: '8px 20px',
+                borderRadius: '20px',
+                border: '2px solid #e91e63',
+                backgroundColor: 'transparent',
+                color: '#e91e63',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+              }}
+              onClick={() => onChangeSignature && onChangeSignature()}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#f8bbd9';
+                e.target.style.borderColor = '#c2185b';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'transparent';
+                e.target.style.borderColor = '#e91e63';
+              }}
+            >
+              更改个性签名
+            </button>
+          </div>
+        )}
 
         {/* 只有在不是自己的时候才显示发消息和删除好友按钮 ,如果该好友没有被添加则显示加好友按钮*/}
         {!selectedFriend.isSelf && (
@@ -233,6 +283,24 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
         onConfirm={handleConfirmDelete}
         friendName={selectedFriend.name}
       />
+      {/* 删除成功提示 */}
+      {deleteSuccess && (
+        <div style={{
+          position: 'fixed',
+          top: '20%',
+          left: '50%',
+          transform: 'translate(-50%, 0)',
+          background: '#4caf50',
+          color: '#fff',
+          padding: '16px 32px',
+          borderRadius: '12px',
+          zIndex: 2000,
+          fontSize: '18px',
+          fontWeight: 600
+        }}>
+          删除好友成功
+        </div>
+      )}
     </div>
   );
 };

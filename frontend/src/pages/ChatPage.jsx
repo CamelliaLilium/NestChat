@@ -1,37 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
+import api from '../../utils/api.js';
 import VideoBubble from '../components/VideoBubble.jsx';
 import ChatInputBar from '../components/ChatInputBar.jsx';
 import ChatListPage from '../components/ChatListPage.jsx';
 import VideoCallModal from '../components/VideoCallModal.jsx';
 import VoiceChatModal from '../components/VoiceChat.jsx';
 
-const ChatPage = ({ onNavigateToFriends, currentUser }) => {
-  // 模拟不同用户的聊天数据
-  const [allChats] = useState({
-    1: [
-      { id: 1, type: 'text', content: "你好！今天天气不错呢", isOwn: false, timestamp: "14:20", avatar: "2.png" },
-      { id: 2, type: 'text', content: "是的，很适合出去走走", isOwn: true, timestamp: "14:21", avatar: currentUser?.avatar || "1.png" },
-      { id: 3, type: 'text', content: "周末有什么计划吗？", isOwn: false, timestamp: "14:22", avatar: "2.png" },
-      { id: 4, type: 'text', content: "想去公园拍照，你要一起来吗？", isOwn: true, timestamp: "14:23", avatar: currentUser?.avatar || "1.png" },
-    ],
-    2: [
-      { id: 1, type: 'text', content: "会议资料我已经准备好了", isOwn: false, timestamp: "12:15", avatar: "3.png" },
-      { id: 2, type: 'text', content: "太好了，明天见！", isOwn: true, timestamp: "12:16", avatar: currentUser?.avatar || "1.png" },
-    ],
-    3: [
-      { id: 1, type: 'text', content: "周末一起去看电影吧！", isOwn: false, timestamp: "昨天", avatar: "4.png" },
-      { id: 2, type: 'text', content: "好的，看什么电影？", isOwn: true, timestamp: "昨天", avatar: currentUser?.avatar || "1.png" },
-    ],
-  });
-
+const ChatPage = ({ onNavigateToFriends, currentUser ,onLogout}) => {
+  // 当前聊天对象ID（好友ID）
   const [currentChatId, setCurrentChatId] = useState(1);
-  const [messages, setMessages] = useState(allChats[currentChatId]);
+  // 消息列表
+  const [messages, setMessages] = useState([]);
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const [isChatListOpen, setIsChatListOpen] = useState(false);
   const [isVoiceChatOpen, setIsVoiceChatOpen] = useState(false);
 
   const [contactInfo, setContactInfo] = useState({
-    name: "张三",
+    name: "❤(^_^)✝天神降临✝张潇涵✝（^_^）❤",
     isOnline: true,
   });
 
@@ -41,33 +26,37 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // 拉取消息和联系人信息
+  useEffect(() => {
+    if (!currentChatId) return;
+    // 获取消息
+    api.getChatMessages(currentChatId).then(res => {
+      // 兼容后端返回格式
+      setMessages(res.messages || []);
+    });
+    // 获取联系人信息（这里假设有api.getAllUsers，实际可根据你的好友列表传递）
+    api.getAllUsers().then(res => {
+      const user = (res.users || res).find(u => u.id === currentChatId);
+      setContactInfo(user ? { name: user.username || user.name, isOnline: user.status === 'online' } : { name: '未知用户', isOnline: false });
+    });
+  }, [currentChatId]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    setMessages(allChats[currentChatId] || []);
-    const contacts = {
-      1: { name: "张三", isOnline: true },
-      2: { name: "李四", isOnline: false },
-      3: { name: "王五", isOnline: true },
-    };
-    setContactInfo(contacts[currentChatId] || { name: "未知用户", isOnline: false });
-  }, [currentChatId, allChats]);
-
-  const handleSendMessage = (messageText) => {
-    const newMessage = {
-      id: Date.now(),
-      type: 'text',
-      content: messageText,
-      isOwn: true,
-      timestamp: new Date().toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      avatar: currentUser?.avatar || "1.png"
-    };
-    setMessages(prev => [...prev, newMessage]);
+  // 发送文本消息
+  const handleSendMessage = async (messageText) => {
+    if (!currentChatId || !messageText) return;
+    try {
+      const res = await api.sendMessage(currentChatId, messageText, 'text');
+      // 兼容后端返回格式
+      if (res.message) {
+        setMessages(prev => [...prev, res.message]);
+      }
+    } catch (e) {
+      alert(e.message || '消息发送失败');
+    }
   };
 
   const handleVideoCall = () => {
@@ -75,41 +64,53 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
   };
 
   //___________________________________________________________________________
+  // 发送图片消息：选择图片，前端本地预览（base64），插入消息流，type为image
   const handleSendImage = () => {
-    const imageMessage = {
-      id: Date.now(),
-      type: 'text',
-      content: "📷 [图片]",
-      isOwn: true,
-      timestamp: new Date().toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      avatar: currentUser?.avatar || "1.png"
+    if (!currentChatId) return;
+    // 创建一个隐藏的文件选择框
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imageUrl = event.target.result;
+        // 构造本地图片消息对象
+        const localImageMsg = {
+          id: Date.now() + Math.random(),
+          content: imageUrl,
+          type: 'image',
+          isOwn: true,
+          timestamp: new Date().toLocaleTimeString(),
+          avatar: currentUser?.avatar || '',
+        };
+        setMessages(prev => [...prev, localImageMsg]);
+        // TODO: 后端有图片上传接口时，这里可上传后端，返回url再发消息
+      };
+      reader.readAsDataURL(file);
     };
-    setMessages(prev => [...prev, imageMessage]);
+    input.click();
   };
-  //___________________________________________________________________________ 
+  //___________________________________________________________________________
 
   const handleSendVoice = () => {
     setIsVoiceChatOpen(true);
   };
 
-  const handleVoiceMessageSent = (audioUrl) => {
-    const voiceMessage = {
-      id: Date.now(),
-      type: 'audio',
-      content: audioUrl,
-      isOwn: true,
-      timestamp: new Date().toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      avatar: currentUser?.avatar || "1.png"
-    };
-    setMessages(prev => [...prev, voiceMessage]);
-    setIsVoiceChatOpen(false);
-    console.log("Voice message sent, URL:", audioUrl);
+  // 发送语音消息（audioUrl为音频文件url，实际应上传后端并传url）
+  const handleVoiceMessageSent = async (audioUrl) => {
+    if (!currentChatId || !audioUrl) return;
+    try {
+      const res = await api.sendMessage(currentChatId, audioUrl, 'audio');
+      if (res.message) {
+        setMessages(prev => [...prev, res.message]);
+      }
+      setIsVoiceChatOpen(false);
+    } catch (e) {
+      alert(e.message || '语音消息发送失败');
+    }
   };
 
   const handleNavigateToFriends = () => {
@@ -309,6 +310,12 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
             <NavButton onClick={handleRefreshChat} title="刷新聊天" isActive={true}>
               💬
             </NavButton>
+             <NavButton
+              onClick={typeof onLogout === 'function' ? onLogout : () => {}}
+              title="退出登录"
+            >
+              🚪
+            </NavButton>
           </div>
         </div>
 
@@ -322,7 +329,7 @@ const ChatPage = ({ onNavigateToFriends, currentUser }) => {
                 audioUrl={message.type === 'audio' ? message.content : null}
                 isOwn={message.isOwn}
                 timestamp={message.timestamp}
-                avatar={message.avatar}
+                avatar={message.avatar || '1.png'}
                 type={message.type}
               />
             ))}

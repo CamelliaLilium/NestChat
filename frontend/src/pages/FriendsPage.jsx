@@ -1,142 +1,168 @@
-import React, { useState, useEffect } from 'react';
+// 随机头像选择函数（1-10.jpg）
+export function getRandomAvatar() {
+  const idx = Math.floor(Math.random() * 10) + 1;
+  return `${idx}.png`;
+}
+import React, { useState, useEffect, useCallback } from 'react'; // <-- 确保这里有 useCallback
+import api from '../../utils/api.js'; // 确保api路径正确
 import NavButton from '../components/NavButton.jsx';
 import FriendsList from '../components/FriendsList.jsx';
 import FriendDetail from '../components/FriendDetail.jsx';
 import FriendRequestNotification from '../components/FriendRequestNotification.jsx';
+import ChangeSign from '../components/ChangeSign.jsx';
 
-const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarChange }) => {
+const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarChange, onLogout }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  // 搜索头像映射缓存
+  const [searchAvatarMap, setSearchAvatarMap] = useState({});
   const [activeChat, setActiveChat] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
   const [friendsList, setFriendsList] = useState([]);
+  const [showChangeSign, setShowChangeSign] = useState(false);
+  const [currentSignature, setCurrentSignature] = useState(currentUser?.signature || "这是我的个性签名");
 
-  // 创建包含自己的好友列表
-  const createFriendsList = () => {
-    const selfUser = {
-      id: 'self',
+  // 获取本地头像（优先 localStorage，其次 currentUser，其次默认）
+  // 这里的 currentUser 总是组件当前接收到的 prop
+  const getLocalAvatar = useCallback((avatarOverride, user) => {
+    if (avatarOverride) return avatarOverride;
+    const localAvatar = localStorage.getItem('userAvatar');
+    if (localAvatar) return localAvatar;
+    if (user?.avatar && user.avatar !== '') return user.avatar;
+    return '1.png'; // 只返回文件名
+  }, []); // getLocalAvatar 自身不依赖外部变化，因此依赖数组为空
+
+  const createSelfUser = useCallback((avatarOverride) => { // <-- 重新使用 useCallback
+    return {
+      id: currentUser?.id || 'self',
       name: currentUser?.name || "我",
       account: currentUser?.email || "current_user",
-      avatar: currentUser?.avatar || "1.png",
-      signature: "这是我的个性签名",
+      avatar: getLocalAvatar(avatarOverride, currentUser), // 使用 useCallback 后的 getLocalAvatar
+      signature: currentSignature,
       isOnline: true,
       isSelf: true,
       isFriend: true
     };
+  }, [currentUser, currentSignature, getLocalAvatar]); // 依赖 currentUser, currentSignature, getLocalAvatar
 
-    const otherFriends = [
-      {
-        id: 1,
-        name: "张三",
-        account: "zhangsan001",
-        avatar: "2.png",
-        signature: "工作使我快乐",
-        isOnline: true,
-        isFriend: true
-      },
-      {
-        id: 2,
-        name: "李四",
-        account: "lisi_dev",
-        avatar: "3.png",
-        signature: "代码改变世界",
-        isOnline: false,
-        isFriend: true
-      },
-      {
-        id: 3,
-        name: "王五",
-        account: "wangwu2023",
-        avatar: "4.png",
-        signature: "学习永无止境",
-        isOnline: true,
-        isFriend: true
-      },
-      {
-        id: 4,
-        name: "赵六",
-        account: "zhaoliu_sci",
-        avatar: "5.png",
-        signature: "探索科学的奥秘",
-        isOnline: true,
-        isFriend: true
-      },
-      {
-        id: 5,
-        name: "孙七",
-        account: "sunqi_art",
-        avatar: "6.png",
-        signature: "艺术来源于生活",
-        isOnline: false,
-        isFriend: true
-      },
-    ];
-
-    return [selfUser, ...otherFriends];
-  };
-
-  // 初始化数据
+  // --- 数据初始化和API调用 ---
   useEffect(() => {
-    const initialFriendsList = createFriendsList();
-    setFriendsList(initialFriendsList);
+    const fetchInitialData = async () => {
+      try {
+        const apiFriends = await api.getFriends();
+        const selfUser = createSelfUser(); // Initial self user
+        const combinedFriends = [selfUser, ...apiFriends.filter(f => f.id !== selfUser.id)];
+        setFriendsList(combinedFriends);
 
-    const createAllUsers = () => {
-      return [
-        ...initialFriendsList.filter(f => f.id !== 'self'),
-        {
-          id: 6,
-          name: "钱八",
-          account: "qianba_music",
-          avatar: "7.png",
-          signature: "音乐是我的生命",
-          isOnline: true,
-          isFriend: false
-        },
-        {
-          id: 7,
-          name: "吴九",
-          account: "wujiu_tech",
-          avatar: "8.png",
-          signature: "科技创新未来",
-          isOnline: false,
-          isFriend: false
-        }
-      ];
+        const allPlatformUsers = await api.getAllUsers();
+        setAllUsers(allPlatformUsers.filter(user => user.id !== selfUser.id));
+
+        const requests = await api.getFriendRequests();
+        setReceivedRequests(requests);
+
+        // --- 更新 setSelectedFriend 逻辑 ---
+        setSelectedFriend(prevSelected => {
+          // Find the current user in the newly calculated combinedFriends list
+          const updatedSelfUser = combinedFriends.find(f => f.id === (currentUser?.id || 'self'));
+          // If previously selected was "self", update to the new "self" object
+          // 或者如果之前没有选中任何好友，则默认选中自己
+          if (!prevSelected || (prevSelected.id === (currentUser?.id || 'self') || prevSelected.isSelf)) {
+            return updatedSelfUser;
+          }
+          // Otherwise, maintain the previous selected state
+          return prevSelected;
+        });
+        // --- 结束更新 setSelectedFriend 逻辑 ---
+
+      } catch (error) {
+        console.error("初始化数据失败:", error);
+        setFriendsList([createSelfUser()]);
+        setAllUsers([]);
+        setReceivedRequests([]);
+      }
     };
 
-    setAllUsers(createAllUsers());
-  }, [currentUser]);
+    fetchInitialData();
+    // 确保当 currentUser 或 currentSignature 变化时，重新获取数据并更新自身信息
+  }, [currentUser, currentSignature, createSelfUser]); // 添加 createSelfUser 到依赖
 
-  const [contactInfo] = useState({
+  // Handle avatar changes
+  const handleInternalAvatarChange = async (newAvatarUrl) => {
+    try {
+      // 1. 调用父组件的 onAvatarChange，它应该负责更新后端和父组件的 currentUser
+      await onAvatarChange(newAvatarUrl);
+
+      // 2. 将新头像保存到 localStorage，这是 getLocalAvatar 的首选来源
+      localStorage.setItem('userAvatar', newAvatarUrl);
+
+      // 3. 立即更新 friendsList 中自身头像，无需等待父组件 currentUser 更新
+      setFriendsList(prevFriends => prevFriends.map(friend =>
+        friend.id === (currentUser?.id || 'self')
+          ? { ...friend, avatar: newAvatarUrl }
+          : friend
+      ));
+
+      // If the currently selected friend is the current user, update their avatar in selectedFriend state
+      if (selectedFriend && (selectedFriend.id === (currentUser?.id || 'self') || selectedFriend.isSelf)) {
+        setSelectedFriend(prevSelected => ({ ...prevSelected, avatar: newAvatarUrl }));
+      }
+      console.log("头像已更新:", newAvatarUrl);
+    } catch (error) {
+      console.error("更新头像失败:", error);
+    }
+  };
+
+  const contactInfo = {
     name: currentUser?.name || "当前用户",
     isOnline: true,
-  });
+  };
 
-  // 事件处理函数
-  const handleSearch = (query) => {
+  // 搜索数据库所有用户，区分好友和非好友
+  const handleSearch = async (query) => {
     setSearchQuery(query);
     if (query.trim()) {
-      const results = allUsers.filter(user =>
-        user.name.includes(query) ||
-        user.account.includes(query) ||
-        user.signature.includes(query)
-      );
-
-      setSearchResults(results);
-      setShowSearchResults(true);
-
-      if (results.length === 0) {
-        alert('该用户不存在');
-      } else if (results.length > 0) {
-        setSelectedFriend(results[0]);
+      try {
+        const response = await api.searchUsers(query);
+        // 真实头像池，1-7为png，8-10为jpg
+        const avatarPool = [
+          '1.png', '2.png', '3.png', '4.png', '5.png', '6.png', '7.png',
+          '8.jpg', '9.jpg', '10.jpg'
+        ];
+        // 头像分配缓存
+        const newAvatarMap = { ...searchAvatarMap };
+        const results = (response.users || []).map(user => {
+          if (!newAvatarMap[user.id]) {
+            newAvatarMap[user.id] = avatarPool[Math.floor(Math.random() * avatarPool.length)];
+          }
+          return {
+            ...user,
+            avatar: newAvatarMap[user.id],
+            email: user.email || user.account || '',
+            isFriend: friendsList.some(f => f.id === user.id && !f.isSelf),
+            isSelf: user.id === (currentUser?.id || 'self'),
+          };
+        });
+        setSearchAvatarMap(newAvatarMap);
+        setSearchResults(results);
+        setShowSearchResults(true);
+        if (results.length === 0) {
+          console.log('该用户不存在');
+        } else if (results.length > 0) {
+          setSelectedFriend(results[0]);
+        }
+      } catch (error) {
+        console.error('搜索用户失败:', error);
+        setSearchResults([]);
+        setShowSearchResults(true);
       }
     } else {
       setShowSearchResults(false);
       setSearchResults([]);
+      setSelectedFriend(friendsList.find(f => f.isSelf));
     }
   };
 
@@ -145,61 +171,126 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     setShowSearchResults(false);
   };
 
-  // 已有 onNavigateToChat 作为 prop，可以直接调用
-  // const handleNavigateToChat = () => {
-  //   onNavigateToChat();
-  // };
+  const handleRefreshPage = async () => {
+    try {
+      const apiFriends = await api.getFriends();
+      const selfUser = createSelfUser();
+      const combinedFriends = [selfUser, ...apiFriends.filter(f => f.id !== selfUser.id)];
+      setFriendsList(combinedFriends);
 
-  const handleRefreshPage = () => {
-    window.location.reload();
+      const allPlatformUsers = await api.getAllUsers();
+      setAllUsers(allPlatformUsers.filter(user => user.id !== selfUser.id));
+
+      const requests = await api.getFriendRequests();
+      setReceivedRequests(requests);
+
+      // Refreshing also needs to update setSelectedFriend
+      setSelectedFriend(prevSelected => {
+        const updatedSelfUser = combinedFriends.find(f => f.id === (currentUser?.id || 'self'));
+        if (prevSelected && (prevSelected.id === (currentUser?.id || 'self') || prevSelected.isSelf)) {
+          return updatedSelfUser;
+        }
+        return prevSelected;
+      });
+
+      console.log("数据已刷新");
+    } catch (error) {
+      console.error("刷新数据失败:", error);
+    }
   };
-
+// 处理发送消息
   const handleSendMessage = (friend) => {
     if (!friend) return;
     setActiveChat(friend);
     onSelectFriend(friend);
-    onNavigateToChat(); // 调用从 props 传入的导航函数
+    onNavigateToChat();
   };
 
   const handleVideoCall = () => {
     console.log('发起视频通话');
   };
-
-  const handleAddFriend = (friend) => {
+// 处理添加好友
+  const handleAddFriend = async (friend) => {
     if (!friend) return;
-
-    if (friendRequests.includes(friend.id)) {
-      alert('好友请求已发送，请等待对方确认');
+    if (friendRequests.includes(friend.email)) {
+      console.log('好友请求已发送，请等待对方确认');
       return;
     }
-
-    setFriendRequests([...friendRequests, friend.id]);
-    alert(`已向 ${friend.name} 发送好友申请`);
-
-    setReceivedRequests(prev => [...prev, {
-      ...friend,
-      requestId: Date.now()
-    }]);
+    if (friendsList.some(f => f.id === friend.id && !f.isSelf)) {
+      console.log(`${friend.name} 已经是您的好友了`);
+      return;
+    }
+    try {
+      await api.addFriend(friend.email);
+      setFriendRequests(prev => [...prev, friend.email]);
+      // 新增：将头像同步到好友列表
+      setFriendsList(prev => [
+        ...prev,
+        {
+          ...friend,
+          avatar: searchAvatarMap[friend.id] || friend.avatar || '1.png',
+          isFriend: true,
+          isSelf: false,
+        }
+      ]);
+      console.log(`已向 ${friend.name || friend.username} 发送好友申请`);
+    } catch (e) {
+      console.error('发送好友申请失败:', e.message || e);
+    }
   };
-
-  const handleAcceptRequest = (request) => {
-    setFriendsList(prev => [
-      ...prev,
-      {
-        ...request,
-        isFriend: true
+// 处理接受和拒绝好友请求
+  const handleAcceptRequest = async (request) => {
+    try {
+      if (request.id) {
+        await api.acceptFriendRequest(request.id);
       }
-    ]);
-
-    setReceivedRequests(prev => prev.filter(r => r.requestId !== request.requestId));
-    alert(`已添加 ${request.name} 为好友`);
+      setFriendsList(prev => [
+        ...prev,
+        { ...request.from, isFriend: true } // Add the new friend to the list
+      ]);
+      setReceivedRequests(prev => prev.filter(r => r.id !== request.id)); // Remove from pending requests
+      console.log(`已添加 ${request.from.name} 为好友`); // Use request.from.name
+    } catch (e) {
+      console.error('接受好友请求失败:', e.message || e);
+    }
   };
 
-  const handleRejectRequest = (request) => {
-    setReceivedRequests(prev => prev.filter(r => r.requestId !== request.requestId));
+  const handleRejectRequest = async (request) => {
+    try {
+      if (request.id) {
+        await api.rejectFriendRequest(request.id);
+      }
+      setReceivedRequests(prev => prev.filter(r => r.id !== request.id));
+      console.log('已拒绝好友请求');
+    } catch (e) {
+      console.error('拒绝好友请求失败:', e.message || e);
+    }
   };
 
-  // 响应式样式定义
+  const handleChangeSignature = () => {
+    setShowChangeSign(true);
+  };
+
+  const handleSaveSignature = async (newSignature) => {
+    try {
+      // Assuming here you might call an API to update the signature if supported by backend
+      // await api.updateProfile({ signature: newSignature });
+      setCurrentSignature(newSignature);
+      setFriendsList(prev => prev.map(friend =>
+        friend.id === (currentUser?.id || 'self')
+          ? { ...friend, signature: newSignature }
+          : friend
+      ));
+      if (selectedFriend && (selectedFriend.id === (currentUser?.id || 'self') || selectedFriend.isSelf)) {
+        setSelectedFriend(prev => ({ ...prev, signature: newSignature }));
+      }
+      setShowChangeSign(false);
+      console.log("个性签名已保存");
+    } catch (error) {
+      console.error("保存个性签名失败:", error);
+    }
+  };
+
   const containerStyle = {
     display: 'flex',
     flexDirection: 'column',
@@ -232,9 +323,8 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    // 移除 color 和 fontSize，因为将使用图片
     marginRight: '1rem',
-    overflow: 'hidden', // 确保图片超出边界时被裁剪
+    overflow: 'hidden',
   };
 
   const contactInfoStyle = {
@@ -267,21 +357,37 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
     gap: '1px',
   };
 
-  // 响应式文字大小
   const responsiveTextStyle = {
-    fontSize: 'clamp(14px, 2vw, 18px)', // 调整为更合理的响应式字体大小范围
+    fontSize: 'clamp(14px, 2vw, 18px)',
     fontWeight: '500',
     color: 'rgb(2, 0, 0)',
+  };
+
+  // 删除好友后刷新本地好友列表和后端同步
+  const handleFriendDeleted = async (friendId) => {
+    setFriendsList(prev => {
+      const updatedList = prev.filter(f => f.id !== friendId && !f.isSelf);
+      // 如果当前选中的是被删好友，则切换到自己
+      setSelectedFriend(currentSelected => {
+        if (currentSelected && currentSelected.id === friendId) {
+          // 确保从最新的列表中找到“我”
+          return updatedList.find(f => f.isSelf);
+        }
+        return currentSelected;
+      });
+      return updatedList; // 返回更新后的列表
+    });
+    // 可选：刷新后端数据，确保同步
+    await handleRefreshPage();
   };
 
   return (
     <div style={containerStyle}>
       {/* 顶部栏 */}
       <div style={headerStyle}>
-        {/* === 修改这里，用 <img> 标签替换 'F' === */}
         <div style={logoStyle}>
           <img
-            src="/logo.png" // 假设图片在 public/logo.png
+            src="/logo.png"
             alt="Logo"
             style={{
               width: '100%',
@@ -291,50 +397,59 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
             }}
           />
         </div>
-        {/* === 结束修改 === */}
 
         <div style={contactInfoStyle}>
-          <span style={responsiveTextStyle}> {/* 使用响应式字体样式 */}
+          <span style={responsiveTextStyle}>
             {contactInfo.name}
           </span>
           <div style={statusDotStyle(contactInfo.isOnline)}></div>
         </div>
         <div style={navButtonsContainerStyle}>
           <NavButton
-            onClick={handleRefreshPage} // FriendsPage 内部的刷新函数
+            onClick={handleRefreshPage}
             title="好友列表"
-            isActive={true} // 当前页面是好友列表，所以 active
+            isActive={true}
           >
-            👥 {/* Friends list icon */}
+            👥 {/* 好友列表图标 */}
           </NavButton>
           <NavButton
-            onClick={onNavigateToChat} // 从 props 接收的导航到聊天页面函数
+            onClick={onNavigateToChat}
             title="聊天页面"
           >
-            💬 {/* Chat icon */}
+            💬 {/* 聊天图标 */}
           </NavButton>
+          {onLogout && (
+            <NavButton
+              onClick={onLogout}
+              title="退出登录"
+            >
+              🚪 {/* 退出登录图标 */}
+            </NavButton>
+          )}
         </div>
       </div>
 
       {/* 主内容区 */}
       <div style={mainContentStyle}>
         {/* 左侧面板 - 好友列表 */}
-        <FriendsList
-          friends={showSearchResults ? searchResults : friendsList}
-          selectedFriend={selectedFriend}
-          onFriendSelect={handleFriendSelect}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearch}
-        />
+      <FriendsList
+        friends={showSearchResults ? searchResults : friendsList}
+        selectedFriend={selectedFriend}
+        onFriendSelect={handleFriendSelect}
+        onSearchChange={handleSearch} // 输入变化时就搜索
+        onSearch={handleSearch}
+      />
 
         {/* 右侧面板 - 好友详情 */}
         <FriendDetail
           selectedFriend={selectedFriend}
           onSendMessage={() => handleSendMessage(selectedFriend)}
           onVideoCall={handleVideoCall}
-          onAvatarChange={onAvatarChange}
+          onAvatarChange={handleInternalAvatarChange}
           friendRequests={friendRequests}
           onAddFriend={handleAddFriend}
+          onChangeSignature={handleChangeSignature}
+          onFriendDeleted={handleFriendDeleted}
         />
       </div>
 
@@ -342,6 +457,13 @@ const FriendsPage = ({ onNavigateToChat, onSelectFriend, currentUser, onAvatarCh
         requests={receivedRequests}
         onAccept={handleAcceptRequest}
         onReject={handleRejectRequest}
+      />
+
+      <ChangeSign
+        isOpen={showChangeSign}
+        onClose={() => setShowChangeSign(false)}
+        currentSignature={currentSignature}
+        onSave={handleSaveSignature}
       />
     </div>
   );
