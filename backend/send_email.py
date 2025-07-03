@@ -9,42 +9,65 @@ import sys
 import json
 import smtplib
 import random
+import base64
 from email.mime.text import MIMEText
 from email.header import Header
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+import os
 
 def send_verification_email(email: str, vericode: str) -> bool:
-    """发送验证码邮件"""
-    
-    mail_html = f"""<p class=MsoNormal style='layout-grid-mode:char'><span style='font-size:14.0pt;
-font-family:宋体;mso-ascii-font-family:"Times New Roman";mso-hansi-font-family:
-"Times New Roman"'>您的验证码为：</span><span lang=EN-US style='font-size:14.0pt;
-font-family:"Times New Roman",serif;mso-fareast-font-family:宋体;mso-bidi-theme-font:
-minor-bidi'><o:p></o:p></span></p>
-<p class=MsoNormal align=center style='margin-top:7.8pt;margin-right:0cm;
-margin-bottom:7.8pt;margin-left:0cm;mso-para-margin-top:.5gd;mso-para-margin-right:
-0cm;mso-para-margin-bottom:.5gd;mso-para-margin-left:0cm;text-align:center;
-layout-grid-mode:char'><b><span lang=EN-US style='font-size:22.0pt;font-family:
-"Times New Roman",serif;mso-fareast-font-family:宋体;mso-bidi-font-family:Arial;
-letter-spacing:3.0pt'>{vericode}<o:p></o:p></span></b></p>
-<p class=MsoNormal style='layout-grid-mode:char'><span style='font-size:14.0pt;
-font-family:宋体;mso-ascii-font-family:"Times New Roman";mso-hansi-font-family:
-"Times New Roman"'>此验证码包含数字与大写英文字母，输入时请注意字母大小写是否正确。验证码</span><span lang=EN-US
-style='font-size:14.0pt;font-family:"Times New Roman",serif;mso-fareast-font-family:
-宋体;mso-bidi-theme-font:minor-bidi'>10</span><span style='font-size:14.0pt;
-font-family:宋体;mso-ascii-font-family:"Times New Roman";mso-hansi-font-family:
-"Times New Roman"'>分钟内有效。</span><span lang=EN-US style='font-size:14.0pt;
-font-family:"Times New Roman",serif;mso-fareast-font-family:宋体;mso-bidi-theme-font:
-minor-bidi'><o:p></o:p></span></p>"""
-    
-    message = MIMEText(mail_html, 'html', 'utf-8')
-    message['From'] = 'Server <202695135@qq.com>'
-    message['To'] = f'<{email}>'
-    message['Subject'] = Header("验证码", 'utf-8')
-    
+    """发送验证码邮件（纯渐变背景，无logo.png）"""
+
+    mail_html = f"""\
+<html>
+  <body style="margin:0;padding:0;min-height:100vh;position:relative;overflow:hidden;
+    background:linear-gradient(135deg,#f7f6ec 0%,#e3e9f3 100%);
+    ">
+    <div style="position:fixed;inset:0;z-index:0;pointer-events:none;
+      background:rgba(255,255,255,0.15);">
+      <!-- 半透明遮罩，保证内容清晰 -->
+    </div>
+    <div style="max-width:420px;margin:48px auto 32px auto;padding:32px 28px 28px 28px;
+      background:rgba(255,255,255,0.92);border-radius:18px;box-shadow:0 6px 32px rgba(120,120,120,0.10);
+      font-family:'Segoe UI',微软雅黑,Arial,sans-serif;position:relative;z-index:1;">
+      <h2 style="margin-top:0;color:#4a5a7a;text-align:center;letter-spacing:2px;font-weight:600;
+        text-shadow:0 2px 8px #e3e9f3;">NestChat 验证码</h2>
+      <p style="font-size:15px;color:#4a5a7a;text-align:center;margin-bottom:32px;">
+        欢迎来到 NestChat！<br>您的邮箱验证码为：
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <span style="display:inline-block;background:#f7f6ec;color:#3b6ca8;font-size:32px;
+          letter-spacing:8px;font-weight:bold;padding:16px 36px;border-radius:12px;
+          border:2px dashed #b3c6ff;box-shadow:0 2px 8px #e3e9f3;">
+          {vericode}
+        </span>
+      </div>
+      <p style="font-size:14px;color:#6b7a99;text-align:center;">
+        验证码包含数字与大写英文字母，输入时请注意字母大小写。<br>
+        验证码5分钟内有效，请勿泄露给他人。
+      </p>
+      <div style="margin-top:32px;text-align:center;color:#b0b0b0;font-size:12px;">
+        本邮件由系统自动发送，请勿回复。
+      </div>
+    </div>
+  </body>
+</html>
+"""
+
+    # 构建邮件
+    msg_root = MIMEMultipart('alternative')
+    msg_root['From'] = 'Server <202695135@qq.com>'
+    msg_root['To'] = f'<{email}>'
+    msg_root['Subject'] = Header("验证码", 'utf-8')
+
+    from email.mime.text import MIMEText as MT
+    msg_root.attach(MT(mail_html, 'html', 'utf-8'))
+
     try:
         server = smtplib.SMTP_SSL('smtp.qq.com')
         server.login('202695135@qq.com', 'apfimosnwxpfbidg')
-        server.sendmail('202695135@qq.com', [email], message.as_string())
+        server.sendmail('202695135@qq.com', [email], msg_root.as_string())
         server.quit()
         return True
     except Exception as e:
