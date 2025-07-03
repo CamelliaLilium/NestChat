@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import OnlineStatusIndicator from './OnlineStatusIndicator.jsx';
 
 const FriendItem = ({ friend, isSelected, onSelect }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -64,13 +65,24 @@ const FriendItem = ({ friend, isSelected, onSelect }) => {
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => onSelect(friend)}
     >
-      <div style={avatarStyle}>
+      <div style={{...avatarStyle, position: 'relative'}}>
         <img
-          src={`/picture/${friend.avatar || '1.png'}`}
+          src={'/picture/' + (friend.avatar || '1.png')}
           alt={friend.name}
           style={avatarImageStyle}
           onError={e => { e.target.onerror = null; e.target.src = '/picture/1.png'; }}
         />
+        {/* 在线状态指示器 */}
+        <div style={{
+          position: 'absolute',
+          bottom: '-2px',
+          right: '-2px'
+        }}>
+          <OnlineStatusIndicator 
+            userEmail={friend.email || friend.id} 
+            size="small"
+          />
+        </div>
       </div>
       <div style={friendInfoStyle}>
         <div style={friendNameStyle}>{friend.name}</div>

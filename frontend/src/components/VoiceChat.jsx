@@ -59,9 +59,87 @@ const VoiceChatModal = ({ isOpen, onClose, onSendVoice }) => {
   // 处理开始录制
   const handleStartRecording = async () => {
     try {
-      // 预留接口：实际应用中，这里会请求麦克风权限并初始化 MediaRecorder
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      console.log('开始检查录音兼容性...');
+      
+      // 1. 检查基础API支持 - 增强检测
+      if (!navigator.mediaDevices) {
+        // 尝试使用旧版API作为fallback
+        if (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia) {
+          console.warn('使用旧版getUserMedia API');
+          return await handleLegacyRecording();
+        }
+        throw new Error('MediaDevices_API_NOT_SUPPORTED');
+      }
+      
+      if (!navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia_NOT_SUPPORTED');
+      }
+      
+      if (!window.MediaRecorder) {
+        throw new Error('MediaRecorder_NOT_SUPPORTED');
+      }
+      
+      // 2. 检查权限状态
+      if (navigator.permissions) {
+        try {
+          const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+          console.log('麦克风权限状态:', permissionStatus.state);
+          
+          if (permissionStatus.state === 'denied') {
+            throw new Error('PERMISSION_DENIED');
+          }
+        } catch (permError) {
+          console.warn('权限查询失败:', permError);
+        }
+      }
+      
+      // 3. 检查HTTPS要求（在非localhost环境下）
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        console.warn('录音功能需要HTTPS环境或localhost环境');
+      }
+      
+      console.log('开始请求麦克风权限...');
+      
+      // 4. 使用更宽松的约束请求麦克风权限
+      const constraints = {
+        audio: {
+          echoCancellation: false,  // 简化约束
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 44100,
+          channelCount: 1
+        }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      console.log('麦克风权限获取成功，开始录制...');
+      
+      // 5. 尝试不同的MediaRecorder配置
+      let recorderOptions = null;
+      const mimeTypes = [
+        { mimeType: 'audio/webm' },
+        { mimeType: 'audio/webm;codecs=opus' },
+        { mimeType: 'audio/mp4' },
+        { }  // 无配置，让浏览器自动选择
+      ];
+      
+      for (const options of mimeTypes) {
+        try {
+          mediaRecorderRef.current = new MediaRecorder(stream, options);
+          recorderOptions = options;
+          console.log('使用MediaRecorder配置:', options);
+          break;
+        } catch (e) {
+          console.warn('MediaRecorder配置失败:', options, e);
+        }
+      }
+      
+      if (!mediaRecorderRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        throw new Error('MediaRecorder_CONSTRUCTOR_FAILED');
+      }
+      
       audioChunksRef.current = []; // 每次开始录制前清空数据块
 
       mediaRecorderRef.current.ondataavailable = (event) => {
@@ -84,8 +162,48 @@ const VoiceChatModal = ({ isOpen, onClose, onSendVoice }) => {
       setAudioData(null); // 清除之前的录音数据
       console.log("开始录制语音...");
     } catch (error) {
-      console.error("获取麦克风权限失败或录制出错:", error);
-      // 可以添加用户友好的错误提示
+      console.error("录音启动失败:", error);
+      
+      // 根据错误类型提供具体的解决方案
+      let errorMessage = '';
+      let solution = '';
+      
+      switch (error.message) {
+        case 'MediaDevices_API_NOT_SUPPORTED':
+          errorMessage = '您的浏览器不支持MediaDevices API';
+          solution = '请使用Chrome 53+、Firefox 36+、Safari 11+或Edge 79+';
+          break;
+        case 'getUserMedia_NOT_SUPPORTED':
+          errorMessage = '您的浏览器不支持getUserMedia功能';
+          solution = '请更新浏览器到最新版本或换用Chrome/Firefox';
+          break;
+        case 'MediaRecorder_NOT_SUPPORTED':
+          errorMessage = '您的浏览器不支持MediaRecorder API';
+          solution = '请使用Chrome 47+、Firefox 25+或Safari 14.1+';
+          break;
+        default:
+          if (error.name === 'NotAllowedError') {
+            errorMessage = '麦克风权限被拒绝';
+            solution = '请点击地址栏的🔒图标，允许麦克风权限，然后刷新页面重试';
+          } else if (error.name === 'NotFoundError') {
+            errorMessage = '未检测到麦克风设备';
+            solution = '请检查麦克风是否正确连接，或在系统设置中启用麦克风';
+          } else if (error.name === 'NotReadableError') {
+            errorMessage = '麦克风被其他应用占用';
+            solution = '请关闭其他使用麦克风的应用，然后重试';
+          } else if (error.name === 'OverconstrainedError') {
+            errorMessage = '麦克风不支持请求的参数';
+            solution = '您的麦克风可能过于老旧，请尝试使用其他设备';
+          } else if (error.name === 'SecurityError') {
+            errorMessage = '安全限制阻止了录音功能';
+            solution = '请确保在HTTPS环境下使用，或使用localhost进行测试';
+          } else {
+            errorMessage = '录音功能启动失败';
+            solution = `错误详情: ${error.message}`;
+          }
+      }
+      
+      alert(`❌ ${errorMessage}\n\n💡 解决方案: ${solution}`);
     }
   };
 
@@ -234,6 +352,66 @@ const VoiceChatModal = ({ isOpen, onClose, onSendVoice }) => {
     cursor: 'pointer', // 鼠标指针
     color: '#9e9e9e', // 颜色
     transition: 'color 0.2s ease', // 过渡效果
+  };
+
+  // 旧版getUserMedia API的fallback实现
+  const handleLegacyRecording = async () => {
+    return new Promise((resolve, reject) => {
+      console.log('尝试使用旧版getUserMedia API...');
+      
+      // 获取旧版getUserMedia
+      const getUserMedia = navigator.getUserMedia || 
+                          navigator.webkitGetUserMedia || 
+                          navigator.mozGetUserMedia || 
+                          navigator.msGetUserMedia;
+      
+      if (!getUserMedia) {
+        reject(new Error('NO_GETUSERMEDIA_SUPPORT'));
+        return;
+      }
+      
+      getUserMedia.call(navigator, 
+        { audio: true },
+        (stream) => {
+          console.log('旧版getUserMedia成功');
+          
+          try {
+            if (!window.MediaRecorder) {
+              throw new Error('MediaRecorder_NOT_SUPPORTED');
+            }
+            
+            mediaRecorderRef.current = new MediaRecorder(stream);
+            audioChunksRef.current = [];
+            
+            mediaRecorderRef.current.ondataavailable = (event) => {
+              audioChunksRef.current.push(event.data);
+            };
+
+            mediaRecorderRef.current.onstop = () => {
+              const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+              setAudioData(audioBlob);
+              console.log("录音停止，音频数据已准备好。");
+              stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorderRef.current.start();
+            setIsRecording(true);
+            setRecordingTime(0);
+            setAudioData(null);
+            console.log("开始录制语音...");
+            
+            resolve();
+          } catch (error) {
+            stream.getTracks().forEach(track => track.stop());
+            reject(error);
+          }
+        },
+        (error) => {
+          console.error('旧版getUserMedia失败:', error);
+          reject(error);
+        }
+      );
+    });
   };
 
   return (

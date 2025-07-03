@@ -203,6 +203,24 @@ class ApiClient {
     });
   }
 
+  // ===================== 在线状态相关 =====================
+
+  /**
+   * 获取在线好友列表
+   * @returns {Promise<Object>} 在线好友状态信息
+   */
+  async getOnlineFriends() {
+    return this.request('/friends/online');
+  }
+
+  /**
+   * 获取所有在线用户（管理员功能）
+   * @returns {Promise<Object>} 所有在线用户信息
+   */
+  async getAllOnlineUsers() {
+    return this.request('/online-users');
+  }
+
   // ===================== 用户相关 =====================
 
   /**
@@ -253,51 +271,130 @@ class ApiClient {
    * @param {string} emailOrId - 好友用户邮箱或ID
    * @returns {Promise<Object>} 添加结果
    */
-<<<<<<< HEAD
   async addFriend(emailOrId) {
     return this.sendFriendRequest(emailOrId);
-=======
-  async handleaddFriend(friendId) {
-    return this.request(`/friends/${friendId}`, {
-      method: 'POST',
-    });
->>>>>>> 3162be600e5bfc6a4e70ac93eb12ddcf07eb1659
   }
+  
 
   /**
    * 删除好友
    * @param {string} friendId - 好友用户ID
    * @returns {Promise<Object>} 删除结果
    */
-  async handleremoveFriend(friendId) {
+  async removeFriend(friendId) {
     return this.request(`/friends/${friendId}`, {
       method: 'DELETE',
     });
+  }
+  
+  /**
+   * 删除好友（别名方法，保持向后兼容）
+   * @param {string} friendId - 好友用户ID
+   * @returns {Promise<Object>} 删除结果
+   */
+  async handleremoveFriend(friendId) {
+    return this.removeFriend(friendId);
   }
 
   // ===================== 聊天相关 =====================
 
   /**
    * 获取与指定联系人的聊天消息
-   * @param {string} contactId - 联系人用户ID
+   * @param {string} contactId - 联系人用户ID（邮箱）
    * @returns {Promise<Array>} 聊天消息列表
    */
   async getChatMessages(contactId) {
-    return this.request(`/chat/messages?contact_id=${contactId}`);
+    return this.request(`/chat/messages?contact_id=${encodeURIComponent(contactId)}`);
   }
 
   /**
-   * 发送聊天消息
-   * @param {string} receiverId - 接收方用户ID
+   * 发送文本消息
+   * @param {string} receiverId - 接收方用户ID（邮箱）
    * @param {string} content - 消息内容
-   * @param {string} [type='text'] - 消息类型（如text、image等）
+   * @param {string} [type='text'] - 消息类型
    * @returns {Promise<Object>} 发送结果
    */
-  async sendMessage(receiverId, content, type = 'text') {
+  async sendTextMessage(receiverId, content, type = 'text') {
+    const payload = {
+      receiver_id: receiverId,
+      content: content,
+      type: type
+    };
+    
     return this.request('/chat/messages', {
       method: 'POST',
-      body: JSON.stringify({ receiver_id: receiverId, content, type }),
+      body: JSON.stringify(payload),
     });
+  }
+
+  /**
+   * 发送安全聊天消息（图片隐写）
+   * @param {string} receiverId - 接收方用户ID
+   * @param {string} imageJpgBase64 - 隐写后的jpg图片base64
+   * @param {string} [type='image_stego'] - 消息类型
+   * @returns {Promise<Object>} 发送结果
+   */
+  async sendMessage(receiverId, imageJpgBase64, type = 'image_stego') {
+    return this.request('/chat/messages', {
+      method: 'POST',
+      body: JSON.stringify({ receiver_id: receiverId, image_jpg_base64: imageJpgBase64, type }),
+    });
+  }
+
+  /**
+   * 获取聊天消息历史
+   * @param {string} chatId - 聊天对象ID（邮箱）
+   * @returns {Promise<Object>} 包含消息列表的对象
+   */
+  async getChatMessages(chatId) {
+    return this.request(`/chat/messages?contact_id=${encodeURIComponent(chatId)}`);
+  }
+
+  /**
+   * 发送消息（加密隐写版本）
+   * @param {string} receiverId - 接收方邮箱
+   * @param {string} content - 消息内容（明文）
+   * @param {string} type - 消息类型
+   * @param {string} encryptedImageBase64 - 加密隐写后的图片数据
+   * @returns {Promise<Object>} 发送结果
+   */
+  async sendEncryptedMessage(receiverId, content, type = 'text', encryptedImageBase64 = null) {
+    const payload = {
+      receiver_id: receiverId,
+      content: content,
+      type: type,
+      encrypted_image: encryptedImageBase64 // 隐写图片数据
+    };
+    
+    return this.request('/chat/messages', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /**
+   * 交换公钥（用于密钥协商）
+   * @param {string} peerEmail - 对方邮箱
+   * @param {string} publicKey - 自己的RSA公钥
+   * @returns {Promise<Object>} 包含对方公钥的对象
+   */
+  async exchangePublicKey(peerEmail, publicKey) {
+    return this.request('/crypto/key-exchange', {
+      method: 'POST',
+      body: JSON.stringify({
+        peer_email: peerEmail,
+        public_key: publicKey
+      }),
+    });
+  }
+
+  /**
+   * 获取用户的公钥
+   * @param {string} userEmail - 用户邮箱
+   * @returns {Promise<Object>} 包含公钥的对象
+   */
+  async getUserPublicKey(userEmail) {
+    return this.request(`/crypto/public-key/${encodeURIComponent(userEmail)}`);
   }
 
   // ===================== 视频通话相关 =====================
@@ -334,6 +431,57 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
+  }
+
+  /**
+   * 获取最近聊天列表
+   * @returns {Promise<Object>} 包含最近聊天列表的对象
+   */
+  async getRecentChats() {
+    return this.request('/chat/recent');
+  }
+
+  /**
+   * 创建或获取聊天
+   * @param {string} contactEmail - 联系人邮箱
+   * @returns {Promise<Object>} 聊天信息
+   */
+  async createChat(contactEmail) {
+    return this.request('/chat/create', {
+      method: 'POST',
+      body: JSON.stringify({ contact_email: contactEmail })
+    });
+  }
+
+  /**
+   * 发送图片消息
+   * @param {string} receiverId - 接收方用户ID（邮箱）
+   * @param {string} imageData - 图片base64数据
+   * @param {string} fileName - 文件名（可选）
+   * @param {number} fileSize - 文件大小（可选）
+   * @returns {Promise<Object>} 发送结果
+   */
+  async sendImageMessage(receiverId, imageData, fileName = null, fileSize = null) {
+    const payload = {
+      receiver_id: receiverId,
+      image_data: imageData,
+      file_name: fileName,
+      file_size: fileSize
+    };
+    
+    return this.request('/chat/images', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /**
+   * 获取与指定联系人的图片消息历史
+   * @param {string} contactId - 联系人用户ID（邮箱）
+   * @returns {Promise<Array>} 图片消息列表
+   */
+  async getChatImages(contactId) {
+    return this.request(`/chat/images?contact_id=${encodeURIComponent(contactId)}`);
   }
 }
 

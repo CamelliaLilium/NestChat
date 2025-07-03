@@ -1,5 +1,6 @@
 import React from 'react';
 import FriendItem from './FriendItem.jsx';
+import OnlineStatusIndicator from './OnlineStatusIndicator.jsx';
 
 const FriendsList = ({ friends, selectedFriend, onFriendSelect, searchQuery, onSearchChange, onSearch }) => {
   const leftPanelStyle = {

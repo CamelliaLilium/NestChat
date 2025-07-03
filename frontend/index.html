@@ -4,10 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <meta http-equiv="Permissions-Policy" content="microphone=*, camera=*" />
+    <title>NestChat - 视频聊天系统</title>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Chrome 138 强制修复脚本 - 必须在React应用加载前执行 -->
+    <script src="/chrome138-force-fix.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

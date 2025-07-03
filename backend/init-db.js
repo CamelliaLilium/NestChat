@@ -1,33 +1,34 @@
 const path = require('path');
 const crypto = require('crypto');
+const sqlite3 = require('sqlite3').verbose();
 
-// 尝试加载better-sqlite3
-let Database, db;
+// 数据库路径
+const dbPath = path.join(__dirname, 'server.db');
+const db = new sqlite3.Database(dbPath);
 
-try {
-  Database = require('better-sqlite3');
-  
-  const dbPath = path.join(__dirname, 'server.db');
-  db = new Database(dbPath);
-  
-  console.log('🔧 初始化数据库...');
-  
-  // 创建表
-  db.exec(`
+console.log('🔧 初始化数据库...');
+
+// 创建表
+db.serialize(() => {
+  db.run(`
     CREATE TABLE IF NOT EXISTS UserTable (
       email VARCHAR(64) PRIMARY KEY,
       username VARCHAR(32) NOT NULL,
       pwdhash CHAR(64) NOT NULL
-    );
-    
+    )
+  `);
+  
+  db.run(`
     CREATE TABLE IF NOT EXISTS FriendTable (
       email1 VARCHAR(64),
       email2 VARCHAR(64),
       PRIMARY KEY (email1, email2),
       FOREIGN KEY (email1) REFERENCES UserTable(email),
       FOREIGN KEY (email2) REFERENCES UserTable(email)
-    );
-    
+    )
+  `);
+  
+  db.run(`
     CREATE TABLE IF NOT EXISTS FriendRequest (
       inviter VARCHAR(64),
       invitee VARCHAR(64),
@@ -35,17 +36,35 @@ try {
       PRIMARY KEY (inviter, invitee),
       FOREIGN KEY (inviter) REFERENCES UserTable(email),
       FOREIGN KEY (invitee) REFERENCES UserTable(email)
-    );
-    
+    )
+  `);
+  
+  db.run(`
     CREATE TABLE IF NOT EXISTS MessageTable (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sender VARCHAR(64) NOT NULL,
       receiver VARCHAR(64) NOT NULL,
       content TEXT NOT NULL,
       timestamp REAL NOT NULL,
+      type VARCHAR(16) DEFAULT 'text',
+      encrypted_image TEXT,
       FOREIGN KEY (sender) REFERENCES UserTable(email),
       FOREIGN KEY (receiver) REFERENCES UserTable(email)
-    );
+    )
+  `);
+  
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ImageTable (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender VARCHAR(64) NOT NULL,
+      receiver VARCHAR(64) NOT NULL,
+      image_data TEXT NOT NULL,
+      timestamp REAL NOT NULL,
+      file_name VARCHAR(255),
+      file_size INTEGER,
+      FOREIGN KEY (sender) REFERENCES UserTable(email),
+      FOREIGN KEY (receiver) REFERENCES UserTable(email)
+    )
   `);
   
   // 添加测试用户

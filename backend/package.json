@@ -26,11 +26,8 @@
     "express": "^5.1.0",
     "socket.io": "^4.8.1",
     "sqlite3": "^5.1.7"
-<<<<<<< HEAD
-=======
   },
   "devDependencies": {
     "axios": "^1.6.0"
->>>>>>> 3162be600e5bfc6a4e70ac93eb12ddcf07eb1659
   }
 }

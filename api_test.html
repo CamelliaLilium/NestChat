@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NestChat API 连接测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>NestChat API 连接测试</h1>
+    
+    <h2>当前配置</h2>
+    <div>
+        <strong>前端地址:</strong> http://10.122.239.128:5173<br>
+        <strong>后端API:</strong> http://10.122.239.128:3001/api/v1<br>
+        <strong>WebSocket:</strong> ws://10.122.239.128:3001
+    </div>
+    
+    <h2>测试项目</h2>
+    <button onclick="testHealthAPI()">测试健康检查API</button>
+    <button onclick="testLoginAPI()">测试登录API</button>
+    <button onclick="testWebSocket()">测试WebSocket连接</button>
+    <button onclick="testAll()">全部测试</button>
+    
+    <h2>测试结果</h2>
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://10.122.239.128:3001/api/v1';
+        const WS_BASE = 'ws://10.122.239.128:3001';
+        
+        function addResult(message, isSuccess = true) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = 'result ' + (isSuccess ? 'success' : 'error');
+            div.innerHTML = `${new Date().toLocaleTimeString()} - ${message}`;
+            results.appendChild(div);
+        }
+        
+        async function testHealthAPI() {
+            try {
+                addResult('正在测试健康检查API...');
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`✅ 健康检查成功: ${JSON.stringify(data)}`, true);
+                } else {
+                    addResult(`❌ 健康检查失败: HTTP ${response.status}`, false);
+                }
+            } catch (error) {
+                addResult(`❌ 健康检查错误: ${error.message}`, false);
+            }
+        }
+        
+        async function testLoginAPI() {
+            try {
+                addResult('正在测试登录API...');
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'alice@test.com',
+                        password: '123456'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`✅ 登录API连接成功`, true);
+                } else {
+                    addResult(`⚠️ 登录API可访问，但认证失败: HTTP ${response.status}`, true);
+                }
+            } catch (error) {
+                addResult(`❌ 登录API错误: ${error.message}`, false);
+            }
+        }
+        
+        function testWebSocket() {
+            try {
+                addResult('正在测试WebSocket连接...');
+                const ws = new WebSocket(WS_BASE);
+                
+                ws.onopen = function() {
+                    addResult('✅ WebSocket连接成功', true);
+                    ws.close();
+                };
+                
+                ws.onerror = function(error) {
+                    addResult(`❌ WebSocket连接失败: ${error}`, false);
+                };
+                
+                ws.onclose = function() {
+                    addResult('WebSocket连接已关闭');
+                };
+                
+                // 10秒后如果还没连接上就认为失败
+                setTimeout(() => {
+                    if (ws.readyState !== WebSocket.OPEN) {
+                        addResult('❌ WebSocket连接超时', false);
+                        ws.close();
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                addResult(`❌ WebSocket错误: ${error.message}`, false);
+            }
+        }
+        
+        async function testAll() {
+            document.getElementById('results').innerHTML = '';
+            addResult('开始全面测试...');
+            
+            await testHealthAPI();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testLoginAPI();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            testWebSocket();
+        }
+        
+        // 页面加载时自动运行健康检查
+        window.onload = function() {
+            addResult('页面加载完成，开始测试...');
+            testHealthAPI();
+        };
+    </script>
+</body>
+</html>

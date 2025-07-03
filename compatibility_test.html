@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NestChat 兼容性诊断工具</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #e91e63;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #c2185b;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 NestChat 兼容性诊断工具</h1>
+        <p>Chrome 138.0.7204.97 兼容性深度检测</p>
+        
+        <div class="test-section">
+            <h3>🌐 浏览器基本信息</h3>
+            <button onclick="testBrowserInfo()">检测浏览器信息</button>
+            <div id="browser-info"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🎤 音频录制深度测试</h3>
+            <button onclick="testAudioSupport()">检测音频支持</button>
+            <button onclick="testMicrophoneAccess()">测试麦克风权限</button>
+            <button onclick="testMediaRecorder()">测试MediaRecorder</button>
+            <button onclick="startTestRecording()" id="record-btn">开始测试录音</button>
+            <button onclick="stopTestRecording()" id="stop-btn" disabled>停止录音</button>
+            <div id="audio-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔌 网络连接测试</h3>
+            <button onclick="testAPIConnection()">测试API连接</button>
+            <button onclick="testWebSocketConnection()">测试WebSocket</button>
+            <button onclick="testSocketIO()">测试Socket.IO</button>
+            <div id="network-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔒 安全策略检测</h3>
+            <button onclick="testSecurityPolicies()">检测安全策略</button>
+            <div id="security-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 权限状态</h3>
+            <button onclick="checkPermissions()">检查权限状态</button>
+            <button onclick="requestAllPermissions()">请求所有权限</button>
+            <div id="permissions-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🚀 一键修复</h3>
+            <button onclick="runAutoFix()">自动修复常见问题</button>
+            <div id="fix-results"></div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let testStream = null;
+
+        function addResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `${new Date().toLocaleTimeString()} - ${message}`;
+            container.appendChild(div);
+        }
+
+        function testBrowserInfo() {
+            const container = document.getElementById('browser-info');
+            container.innerHTML = '';
+            
+            const ua = navigator.userAgent;
+            const info = {
+                浏览器: navigator.appName,
+                版本: navigator.appVersion,
+                用户代理: ua,
+                平台: navigator.platform,
+                语言: navigator.language,
+                Cookie启用: navigator.cookieEnabled,
+                在线状态: navigator.onLine,
+                硬件并发: navigator.hardwareConcurrency,
+                内存: navigator.deviceMemory ? navigator.deviceMemory + 'GB' : '未知'
+            };
+
+            // Chrome版本检测
+            const chromeMatch = ua.match(/Chrome\/([0-9.]+)/);
+            if (chromeMatch) {
+                info['Chrome版本'] = chromeMatch[1];
+                const version = parseInt(chromeMatch[1]);
+                if (version >= 88) {
+                    addResult('browser-info', `✅ Chrome版本 ${chromeMatch[1]} 支持所有功能`, 'success');
+                } else {
+                    addResult('browser-info', `⚠️ Chrome版本 ${chromeMatch[1]} 可能不支持某些功能`, 'warning');
+                }
+            }
+
+            Object.entries(info).forEach(([key, value]) => {
+                addResult('browser-info', `${key}: ${value}`, 'info');
+            });
+        }
+
+        async function testAudioSupport() {
+            const container = document.getElementById('audio-results');
+            container.innerHTML = '';
+
+            // 基础API检测
+            const tests = [
+                { name: 'navigator.mediaDevices', check: () => !!navigator.mediaDevices },
+                { name: 'getUserMedia', check: () => !!navigator.mediaDevices?.getUserMedia },
+                { name: 'MediaRecorder', check: () => !!window.MediaRecorder },
+                { name: 'AudioContext', check: () => !!(window.AudioContext || window.webkitAudioContext) },
+                { name: 'MediaStream', check: () => !!window.MediaStream }
+            ];
+
+            tests.forEach(test => {
+                const supported = test.check();
+                addResult('audio-results', 
+                    `${test.name}: ${supported ? '✅ 支持' : '❌ 不支持'}`, 
+                    supported ? 'success' : 'error'
+                );
+            });
+
+            // HTTPS检测
+            const isSecure = location.protocol === 'https:' || 
+                           location.hostname === 'localhost' || 
+                           location.hostname === '127.0.0.1';
+            addResult('audio-results', 
+                `安全环境: ${isSecure ? '✅ 安全' : '⚠️ 不安全'}`, 
+                isSecure ? 'success' : 'warning'
+            );
+
+            // MediaRecorder支持的格式
+            if (window.MediaRecorder) {
+                const formats = ['audio/webm', 'audio/mp4', 'audio/ogg'];
+                formats.forEach(format => {
+                    const supported = MediaRecorder.isTypeSupported(format);
+                    addResult('audio-results', 
+                        `${format}: ${supported ? '✅ 支持' : '❌ 不支持'}`, 
+                        supported ? 'success' : 'error'
+                    );
+                });
+            }
+        }
+
+        async function testMicrophoneAccess() {
+            try {
+                addResult('audio-results', '正在请求麦克风权限...', 'info');
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                addResult('audio-results', '✅ 麦克风权限获取成功', 'success');
+                
+                // 检测音频轨道
+                const audioTracks = stream.getAudioTracks();
+                addResult('audio-results', `音频轨道数: ${audioTracks.length}`, 'info');
+                
+                if (audioTracks.length > 0) {
+                    const track = audioTracks[0];
+                    addResult('audio-results', `设备标签: ${track.label}`, 'info');
+                    addResult('audio-results', `设备ID: ${track.id}`, 'info');
+                    addResult('audio-results', `轨道状态: ${track.readyState}`, 'info');
+                }
+                
+                // 立即停止流
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                addResult('audio-results', `❌ 麦克风访问失败: ${error.name} - ${error.message}`, 'error');
+                
+                // 详细错误分析
+                switch (error.name) {
+                    case 'NotAllowedError':
+                        addResult('audio-results', '💡 解决方案: 点击地址栏的🔒图标，允许麦克风权限', 'warning');
+                        break;
+                    case 'NotFoundError':
+                        addResult('audio-results', '💡 解决方案: 检查麦克风硬件连接', 'warning');
+                        break;
+                    case 'NotReadableError':
+                        addResult('audio-results', '💡 解决方案: 麦克风被其他应用占用，请关闭其他音频应用', 'warning');
+                        break;
+                    case 'OverconstrainedError':
+                        addResult('audio-results', '💡 解决方案: 麦克风不支持请求的参数', 'warning');
+                        break;
+                    case 'SecurityError':
+                        addResult('audio-results', '💡 解决方案: 需要HTTPS环境或localhost', 'warning');
+                        break;
+                }
+            }
+        }
+
+        async function testMediaRecorder() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // 测试不同的MIME类型
+                const mimeTypes = [
+                    'audio/webm',
+                    'audio/webm;codecs=opus',
+                    'audio/mp4',
+                    'audio/ogg;codecs=opus'
+                ];
+                
+                for (const mimeType of mimeTypes) {
+                    try {
+                        const recorder = new MediaRecorder(stream, { mimeType });
+                        addResult('audio-results', `✅ MediaRecorder支持: ${mimeType}`, 'success');
+                    } catch (e) {
+                        addResult('audio-results', `❌ MediaRecorder不支持: ${mimeType}`, 'error');
+                    }
+                }
+                
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                addResult('audio-results', `❌ MediaRecorder测试失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function startTestRecording() {
+            try {
+                addResult('audio-results', '开始测试录音...', 'info');
+                
+                testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(testStream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                    addResult('audio-results', `📝 录音数据块: ${event.data.size} bytes`, 'info');
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    addResult('audio-results', `✅ 录音完成，大小: ${audioBlob.size} bytes`, 'success');
+                    
+                    // 创建播放链接
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = audioUrl;
+                    document.getElementById('audio-results').appendChild(audio);
+                };
+                
+                mediaRecorder.start();
+                document.getElementById('record-btn').disabled = true;
+                document.getElementById('stop-btn').disabled = false;
+                
+                addResult('audio-results', '🎤 录音已开始，请说话...', 'success');
+                
+            } catch (error) {
+                addResult('audio-results', `❌ 录音启动失败: ${error.message}`, 'error');
+            }
+        }
+
+        function stopTestRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                testStream.getTracks().forEach(track => track.stop());
+                
+                document.getElementById('record-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = true;
+                
+                addResult('audio-results', '⏹️ 录音已停止', 'info');
+            }
+        }
+
+        async function testAPIConnection() {
+            const serverIP = '10.122.239.128';
+            const apiUrl = `http://${serverIP}:3001/api/v1/health`;
+            
+            try {
+                addResult('network-results', `测试API连接: ${apiUrl}`, 'info');
+                
+                const response = await fetch(apiUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('network-results', `✅ API连接成功: ${JSON.stringify(data)}`, 'success');
+                } else {
+                    addResult('network-results', `⚠️ API响应异常: HTTP ${response.status}`, 'warning');
+                }
+            } catch (error) {
+                addResult('network-results', `❌ API连接失败: ${error.message}`, 'error');
+                addResult('network-results', `💡 请检查后端服务是否启动: node server.js`, 'warning');
+            }
+        }
+
+        function testWebSocketConnection() {
+            const serverIP = '10.122.239.128';
+            const wsUrl = `ws://${serverIP}:3001`;
+            
+            addResult('network-results', `测试WebSocket连接: ${wsUrl}`, 'info');
+            
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                addResult('network-results', '✅ WebSocket连接成功', 'success');
+                ws.close();
+            };
+            
+            ws.onerror = (error) => {
+                addResult('network-results', `❌ WebSocket连接失败: ${error}`, 'error');
+            };
+            
+            ws.onclose = () => {
+                addResult('network-results', 'WebSocket连接已关闭', 'info');
+            };
+            
+            // 10秒超时
+            setTimeout(() => {
+                if (ws.readyState !== WebSocket.OPEN) {
+                    addResult('network-results', '❌ WebSocket连接超时', 'error');
+                    ws.close();
+                }
+            }, 10000);
+        }
+
+        function testSocketIO() {
+            // 这里需要加载Socket.IO库才能测试
+            addResult('network-results', '⚠️ Socket.IO测试需要在实际应用中进行', 'warning');
+        }
+
+        function testSecurityPolicies() {
+            const container = document.getElementById('security-results');
+            container.innerHTML = '';
+            
+            // 安全策略检测
+            const policies = [
+                { name: 'HTTPS', check: () => location.protocol === 'https:' },
+                { name: 'Same-Origin', check: () => window.origin === location.origin },
+                { name: 'Secure Context', check: () => window.isSecureContext },
+                { name: 'Cross-Origin-Isolation', check: () => window.crossOriginIsolated }
+            ];
+            
+            policies.forEach(policy => {
+                const result = policy.check();
+                addResult('security-results', 
+                    `${policy.name}: ${result ? '✅ 正常' : '⚠️ 受限'}`, 
+                    result ? 'success' : 'warning'
+                );
+            });
+            
+            // CSP检测
+            const meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+            if (meta) {
+                addResult('security-results', `CSP策略: ${meta.content}`, 'info');
+            } else {
+                addResult('security-results', 'CSP策略: 未设置', 'info');
+            }
+        }
+
+        async function checkPermissions() {
+            const container = document.getElementById('permissions-results');
+            container.innerHTML = '';
+            
+            if (!navigator.permissions) {
+                addResult('permissions-results', '❌ Permissions API不支持', 'error');
+                return;
+            }
+            
+            const permissions = ['microphone', 'camera', 'notifications'];
+            
+            for (const permission of permissions) {
+                try {
+                    const result = await navigator.permissions.query({ name: permission });
+                    addResult('permissions-results', 
+                        `${permission}: ${result.state}`, 
+                        result.state === 'granted' ? 'success' : 
+                        result.state === 'prompt' ? 'warning' : 'error'
+                    );
+                } catch (error) {
+                    addResult('permissions-results', `${permission}: 检测失败`, 'error');
+                }
+            }
+        }
+
+        async function requestAllPermissions() {
+            try {
+                // 请求麦克风权限
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                addResult('permissions-results', '✅ 麦克风权限已获取', 'success');
+                stream.getTracks().forEach(track => track.stop());
+                
+                // 刷新权限检查
+                setTimeout(checkPermissions, 1000);
+                
+            } catch (error) {
+                addResult('permissions-results', `❌ 权限请求失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function runAutoFix() {
+            const container = document.getElementById('fix-results');
+            container.innerHTML = '';
+            
+            addResult('fix-results', '🔧 开始自动修复...', 'info');
+            
+            // 1. 检查并请求权限
+            try {
+                await requestAllPermissions();
+                addResult('fix-results', '✅ 权限修复完成', 'success');
+            } catch (error) {
+                addResult('fix-results', '❌ 权限修复失败', 'error');
+            }
+            
+            // 2. 清除缓存提示
+            addResult('fix-results', '💡 建议清除浏览器缓存: Ctrl+Shift+Delete', 'warning');
+            
+            // 3. 重新加载提示
+            addResult('fix-results', '💡 建议重新加载页面以应用修复', 'warning');
+            
+            // 4. 生成修复报告
+            const report = `
+=== Chrome 138 兼容性修复报告 ===
+时间: ${new Date().toLocaleString()}
+浏览器: ${navigator.userAgent}
+URL: ${location.href}
+
+建议操作:
+1. 确保麦克风权限已授予
+2. 清除浏览器缓存和站点数据
+3. 重启浏览器
+4. 检查防火墙设置
+5. 确认后端服务运行正常
+
+如果问题仍然存在，请提供此报告给技术支持。
+            `;
+            
+            const blob = new Blob([report], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nestchat-compatibility-report.txt';
+            a.textContent = '📄 下载详细报告';
+            container.appendChild(a);
+        }
+
+        // 页面加载时自动运行基础检测
+        window.onload = function() {
+            testBrowserInfo();
+            testAudioSupport();
+        };
+    </script>
+</body>
+</html>

@@ -4,32 +4,27 @@ import FriendsPage from './pages/FriendsPage.jsx';
 import SignUpPage from './pages/SignUpPage.jsx';
 import LoginCodePage from './pages/LoginCodePage.jsx';
 import LoginVcodePage from './pages/LoginVcodePage.jsx';
+import CompatibilityFixButton from './components/CompatibilityFixButton.jsx';
+import AudioFixEmergency from './components/AudioFixEmergency.jsx';
 import apiClient from '../utils/api.js';
+import globalSocket from '../utils/globalSocket.js';
+import onlineStatusManager from '../utils/onlineStatusManager.js';
+import avatarManager from '../utils/avatarManager.js';
+import Chrome138Fix from '../utils/chrome138Fix.js';
 
 // App主组件，负责全局状态管理和页面路由
 function App() {
-   // 新增：WebSocket初始化
-  // useEffect(() => {
-  
-    // const initializeWebSocket = async () => {
-    //   try {
-    //     if (currentUser?.email) {
-    //       // 获取用户ID
-    //       const userId = currentUser.email.replace('@', '_').replace('.', '_');
-    //       await websocketClient.connect(userId);
-    //     }
-    //   } catch (error) {
-    //     console.error('WebSocket初始化失败:', error);
-    //   }
-    // };
-
-    // initializeWebSocket();
-
-
-  //   return () => {
-  //     websocketClient.disconnect();
-  //   };
-  // }, [currentUser]);
+  // Chrome 138 兼容性修复
+  useEffect(() => {
+    const chrome138Fix = new Chrome138Fix();
+    chrome138Fix.runAllFixes().then(fixes => {
+      if (fixes.length > 0) {
+        console.log('🔧 Chrome 138兼容性修复完成:', fixes);
+      }
+    }).catch(error => {
+      console.error('Chrome 138修复失败:', error);
+    });
+  }, []);
 
   // getInitialAppState 函数用于从 localStorage 读取初始应用状态
   const getInitialAppState = () => {
@@ -64,16 +59,40 @@ function App() {
   // 使用 useState Hook 管理用户登录状态
   const [isLoggedIn, setIsLoggedIn] = useState(initialAppState.isLoggedIn);
   // 使用 useState Hook 管理当前选中的聊天联系人
-  const [selectedContact, setSelectedContact] = useState({
-    name: '张三', // 默认联系人姓名
-    isOnline: true, // 默认在线状态
-    avatar: '👨‍💼', // 默认头像
-  });
+  const [selectedContact, setSelectedContact] = useState(null); // 默认为null，没有选中联系人
 
-  // 初始化API客户端，在页面刷新时恢复用户邮箱
+  // 初始化API客户端和头像管理系统
   React.useEffect(() => {
     if (isLoggedIn && currentUser?.email) {
       apiClient.setUserEmail(currentUser.email);
+      
+      // 初始化头像管理系统
+      const initializeAvatars = async () => {
+        try {
+          // 获取所有用户来初始化头像分配
+          const allUsers = await apiClient.getAllUsers();
+          await avatarManager.initialize(allUsers);
+        } catch (error) {
+          console.error('头像系统初始化失败:', error);
+          // 即使失败也要初始化基本系统
+          await avatarManager.initialize([currentUser]);
+        }
+      };
+      
+      // 初始化在线状态管理器
+      const initializeOnlineStatus = () => {
+        if (globalSocket.socket && globalSocket.isConnected) {
+          onlineStatusManager.initialize(currentUser, globalSocket.socket);
+          // 将在线状态管理器暴露到全局，供Socket监听器使用
+          window.onlineStatusManager = onlineStatusManager;
+        } else {
+          // 如果Socket还未连接，稍后再试
+          setTimeout(initializeOnlineStatus, 1000);
+        }
+      };
+      
+      initializeAvatars();
+      initializeOnlineStatus();
     }
   }, [isLoggedIn, currentUser?.email]);
 
@@ -87,6 +106,8 @@ function App() {
     // 设置API客户端的用户邮箱
     if (user.email) {
       apiClient.setUserEmail(user.email);
+      // 初始化全局Socket连接
+      globalSocket.initialize(user);
     }
     
     setCurrentPage('chat'); // 登录成功后跳转到聊天页面
@@ -145,6 +166,7 @@ function App() {
   const handleSelectFriend = (friend) => {
     setSelectedContact({
       name: friend.name,
+      email: friend.email || friend.account, // 确保包含邮箱信息
       isOnline: friend.isOnline,
       avatar: friend.avatar,
     });
@@ -159,6 +181,16 @@ function App() {
     } catch (e) {
       console.error('logout error:', e);
     }
+    
+    // 清理在线状态管理器
+    if (window.onlineStatusManager) {
+      onlineStatusManager.destroy();
+      window.onlineStatusManager = null;
+    }
+    
+    // 断开Socket连接
+    globalSocket.disconnect();
+    
     setIsLoggedIn(false);
     setCurrentUser(null);
     localStorage.removeItem('currentUser');
@@ -222,6 +254,12 @@ function App() {
           )}
         </>
       )}
+      
+      {/* 应急修复组件 - 检测到严重问题时显示 */}
+      <AudioFixEmergency />
+      
+      {/* 兼容性修复按钮 - 仅在开发环境显示 */}
+      {import.meta.env.DEV && <CompatibilityFixButton />}
     </div>
   );
 }

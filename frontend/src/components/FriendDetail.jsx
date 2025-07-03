@@ -3,7 +3,7 @@ import PhotoSelect from './PhotoSelect.jsx';
 import DeleteFriendConfirm from './DeleteFriendConfirm.jsx';
 import api from '../../utils/api.js';
 
-const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend, onChangeSignature, onFriendDeleted }) => {
+const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendRequests, onAddFriend, onChangeSignature, onFriendDeleted, sentFriendRequests }) => {
   const [showPhotoSelect, setShowPhotoSelect] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -159,9 +159,11 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
     }
   };
 
-  // 判断是否是好友
-  const isFriend = selectedFriend?.isFriend ||
-    (selectedFriend && !selectedFriend.isSelf && friendRequests.includes(selectedFriend.id));
+  // 判断是否是好友 - 只有真正的好友关系才算
+  const isFriend = selectedFriend?.isFriend;
+
+  // 判断是否已发送好友请求
+  const hasSentRequest = sentFriendRequests && sentFriendRequests.includes(selectedFriend?.email || selectedFriend?.id);
 
   // 添加发送好友请求函数
   const handleSendRequest = () => {
@@ -247,7 +249,7 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
           </div>
         )}
 
-        {/* 只有在不是自己的时候才显示发消息和删除好友按钮 ,如果该好友没有被添加则显示加好友按钮*/}
+        {/* 只有在不是自己的时候才显示相关按钮 */}
         {!selectedFriend.isSelf && (
           <div style={buttonContainerStyle}>
             {isFriend ? (
@@ -259,6 +261,10 @@ const FriendDetail = ({ selectedFriend, onSendMessage, onAvatarChange, friendReq
                   删除好友
                 </button>
               </>
+            ) : hasSentRequest ? (
+              <button style={requestSentButtonStyle} disabled>
+                请求已发送
+              </button>
             ) : (
               <button style={addFriendButtonStyle} onClick={handleSendRequest}>
                 添加好友

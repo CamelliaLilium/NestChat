@@ -121,7 +121,7 @@
 //             title="挂断"
 //           >
 //             <img
-//               src="/电话.svg"
+//               src="/Icon/电话.svg"
 //               alt="电话图标" // 始终添加 alt 属性以提高可访问性
 //               style={{
 //                 width: '80%',     // 使图片宽度填充父元素
@@ -263,7 +263,7 @@ const VideoCallModal = ({ isOpen, onClose, contactName = "好友" }) => {
             title="挂断"
           >
             <img
-              src="/电话.svg"
+              src="/Icon/电话.svg"
               alt="电话图标"
               style={{
                 width: '28px', // 固定宽度，确保图标大小合适

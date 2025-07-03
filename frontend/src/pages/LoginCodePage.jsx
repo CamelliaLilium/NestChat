@@ -106,7 +106,7 @@ const LoginCodePage = ({ onNavigateToSignUp, onNavigateToVerificationLogin, onLo
     justifyContent: 'center',
     height: '100vh',
     // === 修改这里，添加背景图片 ===
-    backgroundImage: 'url("/LoginBack.png")', // 假设图片在 public/images 目录下
+    backgroundImage: 'url("/background/LoginBack.png")', // 使用 background 文件夹下的背景图片
     backgroundSize: 'cover', // 覆盖整个容器
     backgroundRepeat: 'no-repeat', // 不重复平铺
     backgroundPosition: 'center', // 居中显示

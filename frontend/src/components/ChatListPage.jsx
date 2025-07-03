@@ -1,31 +1,44 @@
-
 import React, { useState, useEffect } from 'react';
+import { getFullAvatarInfo } from '../../utils/avatarUtils.js';
 
 // 聊天列表组件，支持外部传入聊天数据
-const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], onClearUnread }) => {
+const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], currentChatId }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [chatList, setChatList] = useState([]);
 
-  // 聊天数据排序，最近时间在最上面
+  // 聊天数据排序，最近时间在最上面，并格式化时间戳
   useEffect(() => {
     if (Array.isArray(propChatList)) {
       // 假设每条数据有 timestamp 字段，类型为 Date 或可比较的字符串
       const sorted = [...propChatList].sort((a, b) => {
         // 支持时间戳为数字或字符串
-        const tA = new Date(a.timestamp).getTime();
-        const tB = new Date(b.timestamp).getTime();
+        const tA = new Date(a.rawTimestamp || a.timestamp).getTime();
+        const tB = new Date(b.rawTimestamp || b.timestamp).getTime();
         return tB - tA;
-      });
+      }).map(chat => ({
+        ...chat,
+        timestamp: formatChatTimestamp(chat.rawTimestamp || chat.timestamp)
+      }));
       setChatList(sorted);
     }
   }, [propChatList]);
 
-  // 点击联系人，清除未读
+  // 格式化时间戳为年月日时间格式
+  const formatChatTimestamp = (timestamp) => {
+    const date = new Date(typeof timestamp === 'number' ? timestamp * 1000 : timestamp);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  // 点击联系人
   const handleChatClick = (chat, index) => {
     if (onSwitchChat) onSwitchChat(chat.id);
-    if (onClearUnread) onClearUnread(chat.id);
-    // 本地也清除未读（如果没有 onClearUnread）
-    setChatList(prev => prev.map((item, i) => i === index ? { ...item, unreadCount: 0 } : item));
   };
 
   // 桌面端右侧面板样式
@@ -71,18 +84,26 @@ const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], onCl
     flex: 1,
     overflowY: 'auto',
     padding: '10px 0',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)', // 恢复原来的透明白色背景
   };
 
-  const chatItemStyle = (index) => ({
-    padding: '16px 20px',
-    borderBottom: '1px solid #f5f5f5',
-    cursor: 'pointer',
-    backgroundColor: hoveredIndex === index ? '#f8f9fa' : 'transparent',
-    transition: 'background-color 0.2s ease',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  });
+  const chatItemStyle = (index, chat) => {
+    // 判断是否为当前选中的聊天
+    const isCurrentChat = currentChatId && (chat.id === currentChatId || chat.email === currentChatId);
+    
+    return {
+      padding: '16px 20px',
+      borderBottom: '1px solid #f5f5f5',
+      cursor: 'pointer',
+      backgroundColor: isCurrentChat 
+        ? '#f8bbd9' // 恢复原来的浅玫瑰色高亮
+        : (hoveredIndex === index ? '#f8f9fa' : 'transparent'), // 恢复原来的悬停效果
+      transition: 'background-color 0.2s ease',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+    };
+  };
 
   const avatarStyle = {
     width: '40px',
@@ -94,6 +115,44 @@ const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], onCl
     justifyContent: 'center',
     fontSize: '20px',
     flexShrink: 0,
+    overflow: 'hidden',
+  };
+
+  // 头像显示组件
+  const AvatarDisplay = ({ chat }) => {
+    const [imageError, setImageError] = useState(false);
+    const avatarInfo = getFullAvatarInfo(chat);
+    
+    // 如果有头像图片且未出错，显示图片
+    if (avatarInfo.avatar && !imageError) {
+      return (
+        <img 
+          src={avatarInfo.avatar} 
+          alt={chat.name} 
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius: '50%'
+          }}
+          onError={() => setImageError(true)}
+        />
+      );
+    }
+    
+    // 否则显示文字（首字母或默认字符）
+    return (
+      <span style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '18px',
+        fontWeight: 'bold',
+        color: '#666'
+      }}>
+        {avatarInfo.fallback}
+      </span>
+    );
   };
 
   const contentStyle = {
@@ -135,18 +194,6 @@ const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], onCl
     marginRight: '8px',
   };
 
-  const unreadBadgeStyle = {
-    backgroundColor: '#e91e63',
-    color: '#ffffff',
-    borderRadius: '10px',
-    padding: '2px 6px',
-    fontSize: '11px',
-    fontWeight: '500',
-    minWidth: '18px',
-    textAlign: 'center',
-    flexShrink: 0,
-  };
-
   return (
     <div style={panelStyle}>
       {/* 头部 */}
@@ -171,12 +218,14 @@ const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], onCl
         {chatList.map((chat, index) => (
           <div
             key={chat.id}
-            style={chatItemStyle(index)}
+            style={chatItemStyle(index, chat)}
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
             onClick={() => handleChatClick(chat, index)}
           >
-            <div style={avatarStyle}>{chat.avatar}</div>
+            <div style={avatarStyle}>
+              <AvatarDisplay chat={chat} />
+            </div>
             <div style={contentStyle}>
               <div style={nameRowStyle}>
                 <span style={nameStyle}>{chat.name}</span>
@@ -184,9 +233,6 @@ const ChatListPage = ({ onClose, onSwitchChat, chatList: propChatList = [], onCl
               </div>
               <div style={messageRowStyle}>
                 <span style={messageStyle}>{chat.lastMessage}</span>
-                {chat.unreadCount > 0 && (
-                  <span style={unreadBadgeStyle}>{chat.unreadCount}</span>
-                )}
               </div>
             </div>
           </div>
