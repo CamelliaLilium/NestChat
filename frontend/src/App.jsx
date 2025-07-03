@@ -151,23 +151,6 @@ function App() {
     setCurrentPage('chat'); // 选中好友后跳转到聊天页面
   };
 
-<<<<<<< HEAD
-   // 统一的退出登录逻辑，支持提示（优化：将提示交由登录页管理）
-  const [logoutMessage, setLogoutMessage] = useState('');
-  const handleLogout = async () => {
-    try {
-      await apiClient.logout();
-    } catch (e) {
-      console.error('logout error:', e);
-    }
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    localStorage.removeItem('currentUser');
-    localStorage.setItem('isLoggedIn', 'false');
-    setCurrentPage('login');
-    setLogoutMessage('已退出登录');
-  };
-=======
   // 统一的退出登录逻辑，支持提示（优化：将提示交由登录页管理）
   const [logoutMessage, setLogoutMessage] = useState('');
   const handleLogout = async () => {
@@ -183,7 +166,6 @@ function App() {
     setCurrentPage('login');
     setLogoutMessage('已退出登录');
   };
->>>>>>> 3162be600e5bfc6a4e70ac93eb12ddcf07eb1659
 
   // 提供给登录页的清除退出提示回调
   const handleClearLogoutMessage = () => setLogoutMessage('');
