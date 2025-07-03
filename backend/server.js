@@ -316,238 +316,238 @@ app.get('/api/v1/users/profile', (req, res) => {
   });
 });
 
-// 获取所有用户列表
+// 获取所有用户列表（查数据库）
 app.get('/api/v1/users', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const userEmail = req.headers['user-email'];
-  
-  // 获取当前用户ID，优先使用user-email头
-  let currentUserId = null;
-  if (userEmail) {
-    const currentUser = users.find(u => u.email === userEmail);
-    currentUserId = currentUser ? currentUser.id : null;
-  } else if (token) {
-    currentUserId = parseInt(token.split('-').pop());
-  }
-  
-  // 返回除自己外的所有用户
-  const userList = users
-    .filter(u => u.id !== currentUserId)
-    .map(u => ({
-      id: u.id,
-      name: u.username, // 添加name字段
-      username: u.username,
-      email: u.email,
-      username: u.username,
-      name: u.username,
-      status: onlineUsers.has(u.email) ? 'online' : 'offline'
-    }));
-    
+  let currentUserEmail = userEmail || null;
+  db.all('SELECT email, username FROM UserTable', [], (err, rows) => {
+    if (err) {
+      console.error('查询用户列表失败:', err);
+      return res.status(500).json({ error: '服务器内部错误' });
+    }
+    // 过滤掉自己
+    const userList = rows
+      .filter(u => u.email !== currentUserEmail)
+      .map(u => ({
+        id: u.email, // 用email做唯一ID
+        name: u.username,
+        username: u.username,
+        email: u.email,
+        status: onlineUsers.has(u.email) ? 'online' : 'offline'
+      }));
     res.json({ users: userList });
   });
+});
 
-// 搜索用户
+// 搜索用户（查数据库）
 app.get('/api/v1/users/search', (req, res) => {
   const { q } = req.query;
-  const token = req.headers.authorization?.replace('Bearer ', '');
   const userEmail = req.headers['user-email'];
-  
-  // 获取当前用户ID，优先使用user-email头
-  let currentUserId = null;
-  if (userEmail) {
-    const currentUser = users.find(u => u.email === userEmail);
-    currentUserId = currentUser ? currentUser.id : null;
-  } else if (token) {
-    currentUserId = parseInt(token.split('-').pop());
-  }
-  
   if (!q) {
     return res.json({ users: [] });
   }
-  
-  const searchResults = users
-    .filter(u => u.id !== currentUserId && 
-      (u.username.toLowerCase().includes(q.toLowerCase()) || 
-       u.email.toLowerCase().includes(q.toLowerCase())))
-    .map(u => ({
-      id: u.id,
-      name: u.username, // 添加name字段以便前端使用
-      username: u.username,
-      email: u.email,
-      status: onlineUsers.has(u.id) ? 'online' : 'offline'
-    }));
-  
-  res.json({ users: searchResults });
+  db.all(
+    'SELECT email, username FROM UserTable WHERE username LIKE ? OR email LIKE ?',
+    [`%${q}%`, `%${q}%`],
+    (err, rows) => {
+      if (err) {
+        console.error('搜索用户失败:', err);
+        return res.status(500).json({ error: '服务器内部错误' });
+      }
+      // 过滤掉自己
+      const userList = rows
+        .filter(u => u.email !== userEmail)
+        .map(u => ({
+          id: u.email,
+          name: u.username,
+          username: u.username,
+          email: u.email,
+          status: onlineUsers.has(u.email) ? 'online' : 'offline'
+        }));
+      res.json({ users: userList });
+    }
+  );
 });
 
 // ====================== 聊天API ======================
-// 获取消息历史
+// 获取消息历史（返回图片密文）
 app.get('/api/v1/chat/messages', (req, res) => {
   const { contact_id } = req.query;
   const token = req.headers.authorization?.replace('Bearer ', '');
   const userId = token ? parseInt(token.split('-').pop()) : null;
-  
+
   // 过滤出相关的聊天消息
-  const chatMessages = messages.filter(msg => 
+  const chatMessages = messages.filter(msg =>
     (msg.sender_id === userId && msg.receiver_id === parseInt(contact_id)) ||
     (msg.sender_id === parseInt(contact_id) && msg.receiver_id === userId)
   );
-  
+
   res.json({ messages: chatMessages });
 });
 
-// 发送消息
+// 发送消息（图片隐写，image_jpg_base64字段）
 app.post('/api/v1/chat/messages', (req, res) => {
-  const { receiver_id, content, type = 'text' } = req.body;
+  const { receiver_id, image_jpg_base64, type = 'image_stego' } = req.body;
   const token = req.headers.authorization?.replace('Bearer ', '');
   const sender_id = token ? parseInt(token.split('-').pop()) : null;
-  
+
+  if (!image_jpg_base64) {
+    return res.status(400).json({ error: '缺少图片数据' });
+  }
+
   const message = {
     id: Date.now(),
     sender_id,
     receiver_id: parseInt(receiver_id),
-    content,
+    image_jpg_base64, // base64字符串，内容为jpg隐写图片
     type,
     timestamp: new Date().toISOString()
   };
-  
+
   messages.push(message);
-  
+
   // 通过WebSocket实时发送
   io.emit('new_message', message);
-  
+
   res.json({ message });
 });
 
 // ====================== 好友API ======================
-// 获取好友列表
+// 获取好友列表（查数据库 FriendTable）
 app.get('/api/v1/friends', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
   const userEmail = req.headers['user-email'];
-  
-  // 获取当前用户ID，优先使用user-email头
-  let currentUserId = null;
-  if (userEmail) {
-    const currentUser = users.find(u => u.email === userEmail);
-    currentUserId = currentUser ? currentUser.id : null;
-  } else if (token) {
-    currentUserId = parseInt(token.split('-').pop());
+  if (!userEmail) {
+    return res.status(401).json({ error: '需要用户身份认证' });
   }
-  
-  // 获取真正的好友关系（而不是所有用户）
-  const userFriendships = friendships.filter(f => 
-    f.userId1 === currentUserId || f.userId2 === currentUserId
+  // 查找所有与当前用户有关的好友关系
+  db.all(
+    'SELECT email1, email2 FROM FriendTable WHERE email1 = ? OR email2 = ?',
+    [userEmail, userEmail],
+    (err, rows) => {
+      if (err) {
+        console.error('查询好友列表失败:', err);
+        return res.status(500).json({ error: '服务器内部错误' });
+      }
+      // 获取所有好友邮箱
+      const friendEmails = rows.map(r => (r.email1 === userEmail ? r.email2 : r.email1));
+      if (friendEmails.length === 0) {
+        return res.json({ friends: [] });
+      }
+      // 查询好友详细信息
+      const placeholders = friendEmails.map(() => '?').join(',');
+      db.all(
+        `SELECT email, username FROM UserTable WHERE email IN (${placeholders})`,
+        friendEmails,
+        (err2, users) => {
+          if (err2) {
+            console.error('查询好友信息失败:', err2);
+            return res.status(500).json({ error: '服务器内部错误' });
+          }
+          const friends = users.map(u => ({
+            id: u.email,
+            name: u.username,
+            username: u.username,
+            email: u.email,
+            status: onlineUsers.has(u.email) ? 'online' : 'offline'
+          }));
+          res.json({ friends });
+        }
+      );
+    }
   );
-  
-  const friends = userFriendships.map(friendship => {
-    const friendId = friendship.userId1 === currentUserId ? friendship.userId2 : friendship.userId1;
-    const friendUser = users.find(u => u.id === friendId);
-    return {
-      id: friendUser.id,
-      name: friendUser.username, // 添加name字段
-      username: friendUser.username,
-      email: friendUser.email,
-      status: onlineUsers.has(friendUser.id) ? 'online' : 'offline'
-    };
-  });
-  
-  res.json({ friends });
 });
 
 // 发送好友请求
 app.post('/api/v1/friends/request', (req, res) => {
   const { email } = req.body;
   const userEmail = req.headers['user-email'];
-  
   if (!userEmail) {
     return res.status(401).json({ error: '需要用户身份认证' });
   }
-  
   if (!email) {
     return res.status(400).json({ error: '缺少目标用户邮箱' });
   }
-  
-  const fromUser = users.find(u => u.email === userEmail);
-  const toUser = users.find(u => u.email === email);
-  
-  if (!fromUser || !toUser) {
-    return res.status(404).json({ error: '用户不存在' });
-  }
-  
-  if (fromUser.id === toUser.id) {
-    return res.status(400).json({ error: '不能给自己发送好友请求' });
-  }
-  
-  // 检查是否已经是好友
-  const existingFriend = friendships.find(f => 
-    (f.userId1 === fromUser.id && f.userId2 === toUser.id) ||
-    (f.userId1 === toUser.id && f.userId2 === fromUser.id)
-  );
-  
-  if (existingFriend) {
-    return res.status(400).json({ error: '已经是好友关系' });
-  }
-  
-  // 检查是否已经有待处理的请求
-  const existingRequest = friendRequests.find(r => 
-    r.fromUserId === fromUser.id && r.toUserId === toUser.id && r.status === 'pending'
-  );
-  
-  if (existingRequest) {
-    return res.status(400).json({ error: '已经发送过好友请求' });
-  }
-  
-  // 创建好友请求
-  const request = {
-    id: `req_${Date.now()}_${fromUser.id}_${toUser.id}`,
-    fromUserId: fromUser.id,
-    toUserId: toUser.id,
-    status: 'pending',
-    requestTime: Date.now()
-  };
-  
-  friendRequests.push(request);
-  
-  // 通知目标用户
-  io.emit('friend_request', {
-    request_id: request.id,
-    from: {
-      id: fromUser.id,
-      name: fromUser.username,
-      email: fromUser.email
-    },
-    to: {
-      id: toUser.id,
-      name: toUser.username,
-      email: toUser.email
+  // 查数据库获取用户信息
+  db.get('SELECT email, username FROM UserTable WHERE email = ?', [userEmail], (err, fromUser) => {
+    if (err || !fromUser) {
+      return res.status(404).json({ error: '用户不存在' });
     }
+    db.get('SELECT email, username FROM UserTable WHERE email = ?', [email], (err2, toUser) => {
+      if (err2 || !toUser) {
+        return res.status(404).json({ error: '目标用户不存在' });
+      }
+      if (fromUser.email === toUser.email) {
+        return res.status(400).json({ error: '不能给自己发送好友请求' });
+      }
+      // 检查是否已经有待处理的请求（内存）
+      const existingRequest = friendRequests.find(r =>
+        r.fromUserId === fromUser.email && r.toUserId === toUser.email && r.status === 'pending'
+      );
+      if (existingRequest) {
+        return res.status(400).json({ error: '已经发送过好友请求' });
+      }
+      // 检查是否已经是好友（数据库FriendTable）
+      db.get('SELECT * FROM FriendTable WHERE (email1 = ? AND email2 = ?) OR (email1 = ? AND email2 = ?)',
+        [fromUser.email, toUser.email, toUser.email, fromUser.email], (err3, friendRow) => {
+        if (friendRow) {
+          return res.status(400).json({ error: '已经是好友关系' });
+        }
+        // 创建好友请求（内存）
+        const request = {
+          id: `req_${Date.now()}_${fromUser.email}_${toUser.email}`,
+          fromUserId: fromUser.email,
+          toUserId: toUser.email,
+          status: 'pending',
+          requestTime: Date.now()
+        };
+        friendRequests.push(request);
+        // 通知目标用户
+        io.emit('friend_request', {
+          request_id: request.id,
+          from: {
+            id: fromUser.email,
+            name: fromUser.username,
+            email: fromUser.email
+          },
+          to: {
+            id: toUser.email,
+            name: toUser.username,
+            email: toUser.email
+          }
+        });
+        res.json({ message: '好友请求已发送', request });
+      });
+    });
   });
-  
-  res.json({ message: '好友请求已发送', request });
 });
 
 // 获取收到的好友请求
 app.get('/api/v1/friends/requests', (req, res) => {
   const userEmail = req.headers['user-email'];
-  
   if (!userEmail) {
     return res.status(401).json({ error: '需要用户身份认证' });
   }
-  
-  const currentUser = users.find(u => u.email === userEmail);
-  if (!currentUser) {
-    return res.status(404).json({ error: '用户不存在' });
-  }
-  
   // 获取发给当前用户的待处理请求
   const requests = friendRequests
-    .filter(r => r.toUserId === currentUser.id && r.status === 'pending')
-    .map(r => {
-      const fromUser = users.find(u => u.id === r.fromUserId);
+    .filter(r => r.toUserId === userEmail && r.status === 'pending');
+  if (requests.length === 0) {
+    return res.json({ requests: [] });
+  }
+  // 批量查找fromUser信息
+  const fromEmails = requests.map(r => r.fromUserId);
+  const placeholders = fromEmails.map(() => '?').join(',');
+  db.all(`SELECT email, username FROM UserTable WHERE email IN (${placeholders})`, fromEmails, (err, users) => {
+    if (err) {
+      return res.status(500).json({ error: '服务器内部错误' });
+    }
+    const userMap = Object.fromEntries(users.map(u => [u.email, u]));
+    const result = requests.map(r => {
+      const fromUser = userMap[r.fromUserId] || { email: r.fromUserId, username: r.fromUserId };
       return {
         id: r.id,
         from: {
-          id: fromUser.id,
+          id: fromUser.email,
           name: fromUser.username,
           email: fromUser.email
         },
@@ -555,8 +555,8 @@ app.get('/api/v1/friends/requests', (req, res) => {
         status: r.status
       };
     });
-  
-  res.json({ requests });
+    res.json({ requests: result });
+  });
 });
 
 // 接受好友请求
@@ -712,24 +712,24 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 实时发送消息
+  // 实时发送消息（图片隐写）
   socket.on('send_message', (data) => {
     console.log('收到实时消息:', data);
-    
+    if (!data.image_jpg_base64) {
+      socket.emit('message_sent', { error: '缺少图片数据' });
+      return;
+    }
     const message = {
       id: Date.now(),
       sender_id: data.sender_id,
       receiver_id: data.receiver_id,
-      content: data.content,
-      type: data.type || 'text',
+      image_jpg_base64: data.image_jpg_base64,
+      type: data.type || 'image_stego',
       timestamp: new Date().toISOString()
     };
-    
     messages.push(message);
-    
     // 发送给目标用户
     socket.to(`user_${data.receiver_id}`).emit('new_message', message);
-    
     // 也发送给自己确认
     socket.emit('message_sent', message);
   });
