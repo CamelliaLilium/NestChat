@@ -1,0 +1,19 @@
+# Web框架
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# WebSocket支持
+websockets==11.0.3
+
+# 视频处理
+opencv-python==4.8.1.78
+PyQt5==5.15.9
+
+# 加密
+pycryptodome==3.19.0
+
+# JWT认证
+PyJWT==2.8.0
+
+# 网络和序列化
+requests==2.31.0
